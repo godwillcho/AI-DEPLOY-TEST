@@ -1,0 +1,4 @@
+The resource EmployeeLookupFunction is in a CREATE_FAILED state
+This AWS::Lambda::Function resource is in a CREATE_FAILED state.
+
+Resource handler returned message: "Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [10]. (Service: Lambda, Status Code: 400, Request ID: 4b71890d-e686-4a6a-b0a4-f81044f343c0) (SDK Attempt Count: 1)" (RequestToken: 52acfe13-a1be-7118-c83a-b2a60fbcd061, HandlerErrorCode: InvalidRequest)

@@ -30,6 +30,7 @@ Usage:
 
 import argparse
 import boto3
+import botocore.exceptions
 from botocore.exceptions import ClientError
 import io
 import json
@@ -699,10 +700,9 @@ def register_mcp_with_connect(session, connect_instance_id, gateway_url, gateway
         logger.info('  Name:      %s', app_name)
         logger.info('  Namespace: %s', namespace)
         logger.info('  AccessUrl: %s', gateway_url)
-        resp = appintegrations_client.create_application(
+        create_params = dict(
             Name=app_name,
             Namespace=namespace,
-            ApplicationType='MCP_SERVER',
             Description='Stability360 Thrive@Work MCP tool server via Bedrock AgentCore Gateway',
             ApplicationSourceConfig={
                 'ExternalUrlConfig': {
@@ -711,6 +711,14 @@ def register_mcp_with_connect(session, connect_instance_id, gateway_url, gateway
             },
             Permissions=[],
         )
+        try:
+            resp = appintegrations_client.create_application(
+                ApplicationType='MCP_SERVER', **create_params,
+            )
+        except (botocore.exceptions.ParamValidationError, ClientError):
+            # Older boto3 versions don't support ApplicationType
+            logger.info('  (ApplicationType not supported by SDK — omitting)')
+            resp = appintegrations_client.create_application(**create_params)
         app_arn = resp['Arn']
         app_id = resp['Id']
         logger.info('Created. ARN: %s', app_arn)

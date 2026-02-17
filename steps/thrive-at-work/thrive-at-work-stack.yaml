@@ -294,7 +294,7 @@ Resources:
           EMPLOYEES_TABLE_NAME: !Ref EmployeesTable
           ENVIRONMENT: !Ref Environment
           LOG_LEVEL: INFO
-      ReservedConcurrentExecutions: 10
+      # ReservedConcurrentExecutions removed — account concurrency limit too low
       Code:
         ZipFile: |
           import json

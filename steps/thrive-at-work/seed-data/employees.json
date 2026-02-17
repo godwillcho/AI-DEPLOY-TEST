@@ -1,0 +1,128 @@
+[
+  {
+    "employee_id": "TW-10001",
+    "employer_id": "EMP-BOEING",
+    "employer_name": "Boeing South Carolina",
+    "partnership_status": "ACTIVE",
+    "eligible_programs": [
+      "financial_counseling",
+      "utility_assistance",
+      "housing_navigation",
+      "food_assistance"
+    ],
+    "date_enrolled": "2025-06-15"
+  },
+  {
+    "employee_id": "TW-10002",
+    "employer_id": "EMP-BOEING",
+    "employer_name": "Boeing South Carolina",
+    "partnership_status": "ACTIVE",
+    "eligible_programs": [
+      "financial_counseling",
+      "utility_assistance",
+      "housing_navigation",
+      "food_assistance"
+    ],
+    "date_enrolled": "2025-07-20"
+  },
+  {
+    "employee_id": "TW-10003",
+    "employer_id": "EMP-BOEING",
+    "employer_name": "Boeing South Carolina",
+    "partnership_status": "ACTIVE",
+    "eligible_programs": [
+      "financial_counseling",
+      "utility_assistance",
+      "housing_navigation",
+      "food_assistance"
+    ],
+    "date_enrolled": "2025-09-01"
+  },
+  {
+    "employee_id": "TW-20001",
+    "employer_id": "EMP-MUSC",
+    "employer_name": "MUSC Health",
+    "partnership_status": "ACTIVE",
+    "eligible_programs": [
+      "financial_counseling",
+      "mental_health_support",
+      "child_care_assistance",
+      "utility_assistance"
+    ],
+    "date_enrolled": "2025-08-10"
+  },
+  {
+    "employee_id": "TW-20002",
+    "employer_id": "EMP-MUSC",
+    "employer_name": "MUSC Health",
+    "partnership_status": "ACTIVE",
+    "eligible_programs": [
+      "financial_counseling",
+      "mental_health_support",
+      "child_care_assistance",
+      "utility_assistance"
+    ],
+    "date_enrolled": "2025-10-05"
+  },
+  {
+    "employee_id": "TW-20003",
+    "employer_id": "EMP-MUSC",
+    "employer_name": "MUSC Health",
+    "partnership_status": "ACTIVE",
+    "eligible_programs": [
+      "financial_counseling",
+      "mental_health_support",
+      "child_care_assistance",
+      "utility_assistance"
+    ],
+    "date_enrolled": "2026-01-12"
+  },
+  {
+    "employee_id": "TW-30001",
+    "employer_id": "EMP-VOLVO",
+    "employer_name": "Volvo Cars Charleston",
+    "partnership_status": "INACTIVE",
+    "eligible_programs": [
+      "financial_literacy",
+      "transportation_support"
+    ],
+    "date_enrolled": "2025-03-20"
+  },
+  {
+    "employee_id": "TW-30002",
+    "employer_id": "EMP-VOLVO",
+    "employer_name": "Volvo Cars Charleston",
+    "partnership_status": "INACTIVE",
+    "eligible_programs": [
+      "financial_literacy",
+      "transportation_support"
+    ],
+    "date_enrolled": "2025-04-15"
+  },
+  {
+    "employee_id": "TW-40001",
+    "employer_id": "EMP-BLACKBAUD",
+    "employer_name": "Blackbaud",
+    "partnership_status": "ACTIVE",
+    "eligible_programs": [
+      "financial_literacy",
+      "utility_assistance",
+      "transportation_support",
+      "housing_navigation"
+    ],
+    "date_enrolled": "2025-11-01"
+  },
+  {
+    "employee_id": "TW-40002",
+    "employer_id": "EMP-BLACKBAUD",
+    "employer_name": "Blackbaud",
+    "partnership_status": "ACTIVE",
+    "eligible_programs": [
+      "financial_literacy",
+      "utility_assistance",
+      "transportation_support",
+      "housing_navigation"
+    ],
+    "date_enrolled": "2026-01-25"
+  }
+]

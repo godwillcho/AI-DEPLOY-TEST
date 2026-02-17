@@ -1,0 +1,64 @@
+{
+  "_note_1": "=== MCP TOOL REFERENCE: Auto-configured during deployment ===",
+  "_info": {
+    "summary": "The MCP employee lookup tool is automatically added to the AI agent during deployment. No manual console steps are needed.",
+    "workshop_reference": "Task 6, Step 4: Add MCP tools from gateway"
+  },
+  "_note_2": "=== AGENT: Target AI agent ===",
+  "agent": {
+    "name": "stability360-thrive-at-work-prod-agent",
+    "agentId": "c55bd286-ebac-4d76-9706-e76afd1ed3ce",
+    "assistantId": "170bfe70-4ed2-4abe-abb8-1d9f5213128d",
+    "type": "ORCHESTRATION"
+  },
+  "_note_3": "=== TOOL PROPERTIES: Configuration to enter in the Connect console ===",
+  "tool_properties": {
+    "toolName": "employee_lookup",
+    "toolType": "RETURN_TO_CONTROL",
+    "description": "Look up an employee by their employee ID to verify eligibility for Stability360 Thrive@Work employer-based programs. Returns employer name, partnership status, eligible programs, and enrollment date.",
+    "user_confirmation": false,
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "employee_id": {
+          "type": "string",
+          "description": "The employee ID to look up (e.g. TW-10001). Alphanumeric characters and hyphens only."
+        }
+      },
+      "required": [
+        "employee_id"
+      ]
+    },
+    "instruction": {
+      "text": "Use this tool when a customer provides their employee ID to verify their enrollment in a Thrive@Work program. Always ask for the employee ID before calling this tool. Format: alphanumeric with hyphens (e.g., TW-10001).",
+      "examples": [
+        {
+          "input": "My employee ID is TW-10001, can you check my eligibility?",
+          "output": "I'll look up your employee ID TW-10001 now to verify your Thrive@Work program eligibility.",
+          "tool_use": {
+            "employee_id": "TW-10001"
+          }
+        },
+        {
+          "input": "I want to know what programs I can access.",
+          "output": "I'd be happy to help you check your eligible programs. Could you please provide me with your employee ID? It typically starts with TW- followed by numbers, for example TW-10001.",
+          "tool_use": null
+        }
+      ]
+    }
+  },
+  "_note_4": "=== MCP TOOL: Internal tool ID for Q Connect API reference ===",
+  "mcp_tool": {
+    "toolName": "employeeLookup",
+    "toolType": "MODEL_CONTEXT_PROTOCOL",
+    "toolId": "gateway_stability360-thrive-at-work-prod-mcp-gw-5kxeyrvib6__stability360-thrive-at-work-prod-api___employeeLookup"
+  },
+  "_note_5": "=== GATEWAY: Bedrock AgentCore MCP gateway details ===",
+  "gateway": {
+    "gatewayId": "stability360-thrive-at-work-prod-mcp-gw-5kxeyrvib6",
+    "targetName": "stability360-thrive-at-work-prod-api",
+    "operationId": "employeeLookup",
+    "securityProfileNamespace": "stability360-thrive-at-work-prod-mcp-gw-5kxeyrvib6",
+    "securityProfileToolPermission": "stability360-thrive-at-work-prod-api___employeeLookup"
+  }
+}

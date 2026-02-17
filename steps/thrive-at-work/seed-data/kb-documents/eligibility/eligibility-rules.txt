@@ -1,0 +1,29 @@
+Thrive@Work Eligibility Rules
+
+Who Is Eligible:
+- All employees of participating Thrive@Work employer partners
+- Employees must have an active employee ID in the Stability360 system
+- Part-time and full-time employees are both eligible
+- Temporary and seasonal employees may be eligible depending on employer agreement
+- Household members of enrolled employees are eligible for select services (EAP counseling)
+
+Verification Process:
+1. Employee provides their Thrive@Work employee ID (format: TW-XXXXX)
+2. The system verifies the ID against the employer database
+3. If matched, the employee's employer, partnership status, and eligible programs are confirmed
+4. If not matched, the employee is directed to contact their HR department for enrollment
+
+Employer Partnership Status:
+- Active: Full access to all Thrive@Work programs
+- Pending: Employer partnership is being set up; limited services may be available
+- Inactive: Partnership has ended; employee may still access 211 community resources
+
+Program-Specific Eligibility:
+- EAP Counseling: Available to all active employees and household members
+- Financial Wellness: Available to all active employees
+- Emergency Assistance: Requires active status plus demonstrated financial hardship
+- Wellness Programs: Available to all active employees; some programs may have waitlists
+- 211 Community Resources: Available to everyone, regardless of enrollment status
+
+Geographic Coverage:
+Thrive@Work primarily serves the Lowcountry region of South Carolina, including Berkeley, Charleston, and Dorchester counties. Some services may be available statewide or nationally depending on the provider.

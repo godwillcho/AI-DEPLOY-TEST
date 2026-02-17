@@ -1,0 +1,102 @@
+openapi: "3.0.3"
+info:
+  title: "Stability360 Thrive@Work Employee Lookup API"
+  description: >
+    API for verifying employee eligibility for Stability360 Thrive@Work
+    employer-based programs.  Call POST /employee/lookup with an employee ID
+    to check enrollment status, employer partnership, and eligible programs.
+  version: "1.0.0"
+
+servers:
+  - url: "${SERVER_URL}"
+    description: "API Gateway endpoint"
+
+paths:
+  /employee/lookup:
+    post:
+      operationId: employeeLookup
+      summary: "Look up an employee by their employee ID"
+      description: >
+        Look up a Thrive@Work employee by their employee ID.
+        Returns employer name, partnership status, eligible programs,
+        and enrollment date.  Use when a caller provides their employee
+        ID to verify eligibility for Stability360 services.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - employee_id
+              properties:
+                employee_id:
+                  type: string
+                  description: "The employee ID to look up (e.g. TW-10001). Alphanumeric characters and hyphens only."
+                  pattern: "^[A-Za-z0-9\\-]+$"
+                  maxLength: 50
+      responses:
+        "200":
+          description: "Successful lookup"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matched:
+                    type: boolean
+                    description: "Whether the employee ID was found in the system"
+                  employee_id:
+                    type: string
+                    description: "The employee ID that was looked up"
+                  employer_name:
+                    type: string
+                    description: "Name of the employer organization"
+                  partnership_status:
+                    type: string
+                    description: "ACTIVE or INACTIVE partnership status"
+                  eligible_programs:
+                    type: array
+                    items:
+                      type: string
+                    description: "List of program names the employee is eligible for"
+                  date_enrolled:
+                    type: string
+                    description: "Date the employee was enrolled (YYYY-MM-DD)"
+                  message:
+                    type: string
+                    description: "Human-readable status message for the AI agent"
+        "400":
+          description: "Invalid request — missing or malformed employee_id"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matched:
+                    type: boolean
+                  error:
+                    type: string
+        "500":
+          description: "Internal server error"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matched:
+                    type: boolean
+                  error:
+                    type: string
+      security:
+        - apiKeyAuth: []
+
+security:
+  - apiKeyAuth: []
+
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

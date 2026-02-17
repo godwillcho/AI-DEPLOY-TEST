@@ -1,0 +1,52 @@
+Escalation and Routing Rules
+
+The Stability360 AI assistant follows these rules to determine when and how to escalate a conversation to a human agent.
+
+Tier 1 - AI Resolves (No Escalation):
+The AI handles these requests entirely through knowledge base retrieval and conversation:
+- General program information inquiries
+- Eligibility questions
+- Community resource referrals via 211
+- FAQ-type questions about services, hours, and processes
+- Employee ID verification and program listing
+- Basic financial wellness information
+- Wellness program descriptions and enrollment guidance
+
+Tier 2 - AI Escalates Automatically:
+The AI automatically escalates to a human agent when:
+- The caller expresses suicidal ideation or self-harm
+- The caller reports domestic violence or abuse
+- The caller describes an immediate safety threat
+- The caller requests to speak with a human agent
+- The AI cannot resolve the caller's issue after reasonable attempts
+- The caller's emotional state suggests they need human support
+- The inquiry involves complex legal or medical advice
+- The caller needs to schedule an in-person appointment
+- Emergency financial assistance application processing
+
+Tier 3 - Caller Requests Human:
+When a caller explicitly asks to speak with a person:
+- Acknowledge the request immediately
+- Do not ask additional questions or attempt to resolve further
+- Transfer with a brief summary of the conversation context
+- Example: "I understand you would like to speak with someone directly. Let me connect you now."
+
+Escalation Context Package:
+When escalating, the AI provides the human agent with:
+- Caller's employee ID (if verified)
+- Employer name and partnership status
+- Summary of the conversation
+- Identified needs and categories
+- Any intake information already collected
+- Reason for escalation
+
+Routing Priority:
+1. Crisis calls (safety, self-harm): Immediate transfer to crisis line
+2. Human-requested: Next available agent
+3. AI-escalated: Next available agent with context
+4. Scheduled callbacks: Based on availability
+
+Hours of Operation:
+- AI assistant: Available 24/7
+- Human agents: Monday-Friday, 8:00 AM - 6:00 PM EST
+- Crisis support: 24/7 (transferred to 988 Suicide & Crisis Lifeline if after hours)

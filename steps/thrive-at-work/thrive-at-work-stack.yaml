@@ -1,0 +1,718 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Stability360 Thrive@Work Stack — Employee ID Lookup MCP Tool.
+  Deploys DynamoDB table, Lambda, API Gateway with API key enforcement,
+  AgentCore MCP Gateway (REST API target configured by deploy.py),
+  and versioned S3 bucket for Knowledge Base data.
+
+Parameters:
+  Environment:
+    Type: String
+    Description: 'Deployment environment'
+    Default: 'dev'
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  EnableMcpGateway:
+    Type: String
+    Description: 'Create AgentCore MCP Gateway for AI agent tool access'
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  EnableConnectIntegration:
+    Type: String
+    Description: 'Integrate MCP Gateway with Amazon Connect (CUSTOM_JWT auth)'
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  ConnectInstanceId:
+    Type: String
+    Description: 'Amazon Connect instance ID (required when EnableConnectIntegration is true)'
+    Default: ''
+
+  ConnectInstanceUrl:
+    Type: String
+    Description: 'Amazon Connect instance URL (required when EnableConnectIntegration is true)'
+    Default: ''
+
+Conditions:
+  CreateMcpGateway: !Equals [!Ref EnableMcpGateway, 'true']
+  IntegrateWithConnect: !And
+    - !Equals [!Ref EnableMcpGateway, 'true']
+    - !Equals [!Ref EnableConnectIntegration, 'true']
+    - !Not [!Equals [!Ref ConnectInstanceUrl, '']]
+
+Resources:
+
+  # =======================================================
+  # CloudWatch / Logging
+  # =======================================================
+
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+    DeletionPolicy: Delete
+
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}'
+      RetentionInDays: 7
+    DeletionPolicy: Delete
+
+  IntakeBotLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-intake-bot'
+      RetentionInDays: 7
+    DeletionPolicy: Delete
+
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-employee-lookup'
+      RetentionInDays: 7
+    DeletionPolicy: Delete
+
+  # =======================================================
+  # DynamoDB — Employees Table
+  # =======================================================
+
+  EmployeesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: employee_id
+          AttributeType: S
+        - AttributeName: employer_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: employee_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmployerIndex
+          KeySchema:
+            - AttributeName: employer_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+    DeletionPolicy: Delete
+
+  # =======================================================
+  # S3 — Knowledge Base Data Bucket
+  # =======================================================
+
+  KnowledgeBaseBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-kb-data-${AWS::Region}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: Stability360
+        - Key: Component
+          Value: ThriveAtWork-KnowledgeBase
+    DeletionPolicy: Delete
+
+  # Custom resource to empty the KB bucket on stack deletion
+  BucketCleanupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3CleanupAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Resource:
+                  - !GetAtt KnowledgeBaseBucket.Arn
+                  - !Sub '${KnowledgeBaseBucket.Arn}/*'
+    DeletionPolicy: Delete
+
+  BucketCleanupLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-bucket-cleanup'
+      RetentionInDays: 7
+    DeletionPolicy: Delete
+
+  BucketCleanupFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: BucketCleanupLogGroup
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-bucket-cleanup'
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt BucketCleanupRole.Arn
+      Timeout: 300
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          def handler(event, context):
+              try:
+                  bucket = event['ResourceProperties']['BucketName']
+                  if event['RequestType'] == 'Delete':
+                      s3 = boto3.client('s3')
+                      paginator = s3.get_paginator('list_object_versions')
+                      for page in paginator.paginate(Bucket=bucket):
+                          for v in page.get('Versions', []):
+                              s3.delete_object(Bucket=bucket, Key=v['Key'], VersionId=v['VersionId'])
+                          for dm in page.get('DeleteMarkers', []):
+                              s3.delete_object(Bucket=bucket, Key=dm['Key'], VersionId=dm['VersionId'])
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f'Error: {e}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+    DeletionPolicy: Delete
+
+  BucketCleanup:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt BucketCleanupFunction.Arn
+      BucketName: !Ref KnowledgeBaseBucket
+    DependsOn: KnowledgeBaseBucket
+
+  # =======================================================
+  # IAM — Lambda Execution Role
+  # =======================================================
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub '${LambdaLogGroup.Arn}:*'
+        - PolicyName: DynamoDBReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt EmployeesTable.Arn
+                  - !Sub '${EmployeesTable.Arn}/index/*'
+        - PolicyName: XRayAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+    DeletionPolicy: Delete
+
+  # =======================================================
+  # Lambda — Employee ID Lookup (Dummy Placeholder)
+  # =======================================================
+
+  EmployeeLookupFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-employee-lookup'
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      TracingConfig:
+        Mode: Active
+      LoggingConfig:
+        LogGroup: !Ref LambdaLogGroup
+        LogFormat: JSON
+      Environment:
+        Variables:
+          EMPLOYEES_TABLE_NAME: !Ref EmployeesTable
+          ENVIRONMENT: !Ref Environment
+          LOG_LEVEL: INFO
+      ReservedConcurrentExecutions: 10
+      Code:
+        ZipFile: |
+          import json
+          def handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'headers': {'Content-Type': 'application/json'},
+                  'body': json.dumps({
+                      'message': 'Placeholder - deploy real code using deploy.py',
+                      'matched': False
+                  })
+              }
+    DeletionPolicy: Delete
+
+  # =======================================================
+  # Lambda — Intake Bot (Dummy Placeholder — deploy.py uploads real code)
+  # =======================================================
+
+  IntakeBotRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub '${IntakeBotLogGroup.Arn}:*'
+    DeletionPolicy: Delete
+
+  IntakeBotFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-intake-bot'
+      Runtime: python3.13
+      Handler: lambda_function.handler
+      Role: !GetAtt IntakeBotRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      LoggingConfig:
+        LogGroup: !Ref IntakeBotLogGroup
+      Code:
+        ZipFile: |
+          import json
+          def handler(event, context):
+              return {
+                  'sessionState': {
+                      'dialogAction': {'type': 'Close'},
+                      'intent': {'name': 'IntakeIntent', 'state': 'Fulfilled'}
+                  }
+              }
+    DeletionPolicy: Delete
+
+  # =======================================================
+  # API Gateway — Explicit Resource Definitions
+  # =======================================================
+
+  EmployeeApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-employee-api'
+      Description: 'Stability360 Thrive@Work — Employee ID Lookup API (MCP Tool 1)'
+      ApiKeySourceType: HEADER
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # /employee resource
+  EmployeeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EmployeeApi
+      ParentId: !GetAtt EmployeeApi.RootResourceId
+      PathPart: employee
+
+  # /employee/lookup resource
+  LookupResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EmployeeApi
+      ParentId: !Ref EmployeeResource
+      PathPart: lookup
+
+  # POST /employee/lookup — requires API key
+  LookupPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EmployeeApi
+      ResourceId: !Ref LookupResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${EmployeeLookupFunction.Arn}/invocations'
+
+  # OPTIONS /employee/lookup — CORS preflight (no API key)
+  LookupOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EmployeeApi
+      ResourceId: !Ref LookupResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-API-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # Lambda Permission — Allow API Gateway to invoke
+  EmployeeLookupPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref EmployeeLookupFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EmployeeApi}/*/*'
+
+  # =======================================================
+  # API Key + Usage Plan
+  # =======================================================
+
+  EmployeeApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: ApiStageDev
+    Properties:
+      Name: !Sub '${AWS::StackName}-api-key'
+      Description: 'API Key for Stability360 Thrive@Work Employee Lookup'
+      Enabled: true
+      GenerateDistinctId: true
+      StageKeys:
+        - RestApiId: !Ref EmployeeApi
+          StageName: !Ref Environment
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - LookupPostMethod
+      - LookupOptionsMethod
+      - ApiGatewayAccount
+    Properties:
+      RestApiId: !Ref EmployeeApi
+
+  ApiStageDev:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref EmployeeApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: !Ref Environment
+      TracingEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiLogGroup.Arn
+        Format:
+          '$context.requestId $context.requestTime $context.httpMethod
+          $context.resourcePath $context.status $context.responseLength
+          $context.identity.apiKey'
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+          ThrottlingRateLimit: 50
+          ThrottlingBurstLimit: 25
+
+  ApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ApiStageDev
+    Properties:
+      UsagePlanName: !Sub '${AWS::StackName}-usage-plan'
+      Throttle:
+        RateLimit: 50
+        BurstLimit: 25
+      Quota:
+        Limit: 10000
+        Period: DAY
+      ApiStages:
+        - ApiId: !Ref EmployeeApi
+          Stage: !Ref Environment
+
+  ApiUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref EmployeeApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiUsagePlan
+
+  # =======================================================
+  # AgentCore MCP Gateway — Exposes Lambda as MCP Tool
+  # =======================================================
+
+  AgentCoreGatewayRole:
+    Type: AWS::IAM::Role
+    Condition: CreateMcpGateway
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: S3ReadOpenApiSpec
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub '${KnowledgeBaseBucket.Arn}/openapi/*'
+        - PolicyName: TokenVaultAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: SecretsManagerAccess
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:bedrock-agentcore-identity*'
+              - Sid: AgentCoreTokenVault
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:GetResourceApiKey
+                  - bedrock-agentcore:GetWorkloadAccessToken
+                  - bedrock-agentcore:GetWorkloadAccessTokenForJwt
+                  - bedrock-agentcore:CompleteResourceTokenAuth
+                Resource: '*'
+        - PolicyName: ApiGatewayInvoke
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - execute-api:Invoke
+                Resource:
+                  - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EmployeeApi}/*'
+    DeletionPolicy: Delete
+
+  AgentCoreGateway:
+    Type: AWS::BedrockAgentCore::Gateway
+    Condition: CreateMcpGateway
+    Properties:
+      Name: !Sub '${AWS::StackName}-mcp-gw'
+      Description: 'Stability360 Thrive@Work MCP Gateway for AI agent tool access'
+      ProtocolType: MCP
+      ProtocolConfiguration:
+        Mcp:
+          Instructions: >
+            Use this gateway to verify employee eligibility for Stability360
+            Thrive@Work employer-based programs. Call employee_lookup with an
+            employee ID to check enrollment status, employer partnership, and
+            eligible programs.
+          # SearchType: SEMANTIC — set on initial deploy; cannot be updated
+          # via CFN once targets exist (API limitation). Already configured
+          # on the live gateway.
+          SupportedVersions:
+            - '2025-03-26'
+      AuthorizerType: !If [IntegrateWithConnect, CUSTOM_JWT, AWS_IAM]
+      AuthorizerConfiguration: !If
+        - IntegrateWithConnect
+        - CustomJWTAuthorizer:
+            DiscoveryUrl: !Sub '${ConnectInstanceUrl}/.well-known/openid-configuration'
+            AllowedAudience:
+              - !Ref ConnectInstanceUrl
+        - !Ref AWS::NoValue
+      RoleArn: !GetAtt AgentCoreGatewayRole.Arn
+      ExceptionLevel: DEBUG
+      Tags:
+        Project: Stability360
+        Component: ThriveAtWork-MCP
+
+  # NOTE: MCP Gateway targets are created by deploy.py (REST API + OpenAPI schema)
+  # instead of CloudFormation, because the target depends on:
+  #   1. The API key registered in AgentCore Identity
+  #   2. The OpenAPI spec uploaded to S3 with the actual API Gateway URL
+
+  # =======================================================
+  # Amazon Connect — AI Agent Security Profile
+  # =======================================================
+
+  AIAgentSecurityProfile:
+    Type: AWS::Connect::SecurityProfile
+    Condition: IntegrateWithConnect
+    Properties:
+      InstanceArn: !Sub 'arn:aws:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}'
+      SecurityProfileName: !Sub '${AWS::StackName}-AI-Agent'
+      Description: !Sub 'Security profile for ${AWS::StackName} AI agents'
+      Permissions:
+        - 'BasicAgentAccess'
+        - 'Wisdom.View'
+      Tags:
+        - Key: Project
+          Value: Stability360
+        - Key: Component
+          Value: ThriveAtWork-AIAgent
+
+  # NOTE: MCP tool permissions (Applications) are added by deploy.py after
+  # the gateway target is created, because tool names are only known at runtime.
+  # AI Agent creation is also handled by deploy.py via the qconnect (Amazon Q)
+  # APIs, since the Q Connect assistant ID is instance-specific.
+
+# =======================================================
+# Outputs
+# =======================================================
+
+Outputs:
+  EmployeeApiUrl:
+    Description: 'Base URL of the Employee Lookup API'
+    Value: !Sub 'https://${EmployeeApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+
+  EmployeeLookupEndpoint:
+    Description: 'Full endpoint URL for the employee lookup POST'
+    Value: !Sub 'https://${EmployeeApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/employee/lookup'
+
+  EmployeesTableName:
+    Description: 'Name of the DynamoDB Employees table'
+    Value: !Ref EmployeesTable
+
+  EmployeeLookupFunctionName:
+    Description: 'Name of the Employee Lookup Lambda function'
+    Value: !Ref EmployeeLookupFunction
+
+  EmployeeLookupFunctionArn:
+    Description: 'ARN of the Employee Lookup Lambda function'
+    Value: !GetAtt EmployeeLookupFunction.Arn
+
+  IntakeBotFunctionName:
+    Description: 'Name of the Intake Bot Lambda function'
+    Value: !Ref IntakeBotFunction
+
+  IntakeBotFunctionArn:
+    Description: 'ARN of the Intake Bot Lambda function'
+    Value: !GetAtt IntakeBotFunction.Arn
+
+  EmployeeApiKeyId:
+    Description: 'ID of the API Key (use deploy.py to retrieve the value)'
+    Value: !Ref EmployeeApiKey
+
+  KnowledgeBaseBucketName:
+    Description: 'S3 bucket name for Thrive@Work KB documents'
+    Value: !Ref KnowledgeBaseBucket
+
+  KnowledgeBaseBucketArn:
+    Description: 'S3 bucket ARN for Thrive@Work KB documents'
+    Value: !GetAtt KnowledgeBaseBucket.Arn
+
+  EmployeeApiOpenApiSpecUrl:
+    Description: 'S3 URI of the Employee Lookup API OpenAPI spec (uploaded by deploy.py)'
+    Value: !Sub 's3://${KnowledgeBaseBucket}/openapi/employee-lookup-spec.yaml'
+
+  McpGatewayUrl:
+    Description: 'MCP Gateway URL for agent connections'
+    Value: !GetAtt AgentCoreGateway.GatewayUrl
+    Condition: CreateMcpGateway
+
+  McpGatewayArn:
+    Description: 'ARN of the AgentCore MCP Gateway'
+    Value: !GetAtt AgentCoreGateway.GatewayArn
+    Condition: CreateMcpGateway
+
+  McpGatewayId:
+    Description: 'ID of the AgentCore MCP Gateway'
+    Value: !GetAtt AgentCoreGateway.GatewayIdentifier
+    Condition: CreateMcpGateway
+
+  McpGatewayDiscoveryUrl:
+    Description: 'OIDC discovery URL for inbound JWT auth (Connect → Gateway)'
+    Value: !Sub '${ConnectInstanceUrl}/.well-known/openid-configuration'
+    Condition: IntegrateWithConnect
+
+  ConnectInstanceId:
+    Description: 'Amazon Connect instance ID'
+    Value: !Ref ConnectInstanceId
+    Condition: IntegrateWithConnect
+
+  ConnectInstanceArn:
+    Description: 'Amazon Connect instance ARN'
+    Value: !Sub 'arn:aws:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}'
+    Condition: IntegrateWithConnect
+
+  ConnectInstanceUrl:
+    Description: 'Amazon Connect instance URL'
+    Value: !Ref ConnectInstanceUrl
+    Condition: IntegrateWithConnect
+
+  AIAgentSecurityProfileArn:
+    Description: 'ARN of the AI Agent security profile'
+    Value: !GetAtt AIAgentSecurityProfile.SecurityProfileArn
+    Condition: IntegrateWithConnect

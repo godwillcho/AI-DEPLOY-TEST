@@ -1,0 +1,39 @@
+11:18:50 [INFO]   AccessUrl: https://stability360-thrive-at-work-prod-mcp-gw-dez06e1svn.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp
+Traceback (most recent call last):
+  File "C:\Users\godwill.cho\OneDrive - SoftwareOne\Desktop\TRIDENT_UNITED_WAY_CDK\TRIDENT-UNITED-WAY-CHAT-REAL_3\AI-DEPLOY-TEST\steps\thrive-at-work\deploy.py", line 4895, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\godwill.cho\OneDrive - SoftwareOne\Desktop\TRIDENT_UNITED_WAY_CDK\TRIDENT-UNITED-WAY-CHAT-REAL_3\AI-DEPLOY-TEST\steps\thrive-at-work\deploy.py", line 4626, in main
+    register_mcp_with_connect(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        session, args.connect_instance_id, gateway_url, gateway_id, args.stack_name,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\godwill.cho\OneDrive - SoftwareOne\Desktop\TRIDENT_UNITED_WAY_CDK\TRIDENT-UNITED-WAY-CHAT-REAL_3\AI-DEPLOY-TEST\steps\thrive-at-work\deploy.py", line 702, in register_mcp_with_connect
+    resp = appintegrations_client.create_application(
+        Name=app_name,
+    ...<8 lines>...
+        Permissions=[],
+    )
+  File "C:\Users\godwill.cho\AppData\Local\Programs\Python\Python313\Lib\site-packages\botocore\client.py", line 602, in _api_call      
+    return self._make_api_call(operation_name, kwargs)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\godwill.cho\AppData\Local\Programs\Python\Python313\Lib\site-packages\botocore\context.py", line 123, in wrapper       
+    return func(*args, **kwargs)
+  File "C:\Users\godwill.cho\AppData\Local\Programs\Python\Python313\Lib\site-packages\botocore\client.py", line 1035, in _make_api_call
+    request_dict = self._convert_to_request_dict(
+        api_params=api_params,
+    ...<3 lines>...
+        headers=additional_headers,
+    )
+  File "C:\Users\godwill.cho\AppData\Local\Programs\Python\Python313\Lib\site-packages\botocore\client.py", line 1102, in _convert_to_request_dict
+    request_dict = self._serializer.serialize_to_request(
+        api_params, operation_model
+    )
+  File "C:\Users\godwill.cho\AppData\Local\Programs\Python\Python313\Lib\site-packages\botocore\validate.py", line 381, in serialize_to_request
+    raise ParamValidationError(report=report.generate_report())
+botocore.exceptions.ParamValidationError: Parameter validation failed:
+Unknown parameter in input: "ApplicationType", must be one of: Name, Namespace, Description, ApplicationSourceConfig, Subscriptions, Publications, ClientToken, Tags, Permissions, IsService, InitializationTimeout, ApplicationConfig, IframeConfig
+
+DOMAIN+godwill.cho@SWO3K79325073GT MINGW64 ~/OneDrive - SoftwareOne/Desktop/TRIDENT_UNITED_WAY_CDK/TRIDENT-UNITED-WAY-CHAT-REAL_3/AI-DEPLOY-TEST/steps/thrive-at-work (main)

@@ -1,0 +1,6 @@
+$ curl -X POST https://1as1skzgn8.execute-api.us-east-1.amazonaws.com/prod/employee/lookup \
+-H "Content-Type: application/json" \
+-H "x-api-key: <API_KEY>" \
+d '{"employee_id": "TW-10001"}'
+{"message":"Forbidden"}curl: (6) Could not resolve host: d
+curl: (3) URL rejected: Malformed input to a URL function

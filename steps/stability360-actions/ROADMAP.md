@@ -227,15 +227,26 @@ The intake bot presents a ListPicker menu with two service options:
 ```
 Start
   → Get customer input (Intake Bot: {stack-name}-intake-bot / live)
-      ├─ Intent: RouteToCommunityResources
-      │    → Get customer input (Stability360Bot + Aria AI agent ARN)
-      │    → Disconnect
-      ├─ Intent: RouteToThriveAtWork
-      │    → Get customer input (Stability360Bot + Thrive@Work AI agent ARN)
-      │    → Disconnect
-      └─ Error / Default
-           → Play prompt → Disconnect
+      → Intent: IntakeIntent
+          → Check contact attributes
+          │  Type  : Lex session attribute
+          │  Key   : selectedRoute
+          │
+          ├─ Condition: = CommunityResources
+          │    → Get customer input (Stability360Bot + Aria AI agent ARN)
+          │    → Disconnect
+          ├─ Condition: = ThriveAtWork
+          │    → Get customer input (Stability360Bot + Thrive@Work AI agent ARN)
+          │    → Disconnect
+          └─ No match / Error
+               → Play prompt → Disconnect
 ```
+
+> **Why session attributes?** Lex V2 does not propagate intent-name changes
+> made in a Lambda `Close` response back to Amazon Connect. Connect always
+> sees the original matched intent (`IntakeIntent`). The Lambda sets
+> `selectedRoute` as a session attribute so the contact flow can branch
+> using a *Check contact attributes* block.
 
 ---
 

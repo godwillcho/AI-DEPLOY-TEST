@@ -4,11 +4,14 @@ Stability360 Intake Bot Lambda — Routes customers to service-specific AI agent
 Handles Lex V2 code hook invocations for the Stability360IntakeBot.
 Sends a ListPicker interactive message with available services.
 
-Routing (both options close the session so the contact flow can branch):
-  - Community Resources: closes session with intent RouteToCommunityResources
-    → contact flow routes to Stability360 Actions AI agent (Aria)
-  - Thrive@Work: closes session with intent RouteToThriveAtWork
-    → contact flow routes to Thrive@Work AI agent
+Routing uses the ``selectedRoute`` session attribute (NOT intent switching,
+because Lex V2 does not propagate intent-name changes in Close responses
+back to Amazon Connect):
+  - Community Resources → selectedRoute = "CommunityResources"
+  - Thrive@Work        → selectedRoute = "ThriveAtWork"
+
+The contact flow should use a *Check contact attributes* block after the
+intake bot to branch on the ``selectedRoute`` Lex session attribute.
 """
 
 import json
@@ -91,26 +94,34 @@ def _elicit_slot_response(intent_name='IntakeIntent', messages=None,
     return resp
 
 
-def _close_session(intent_name, message_text=None, session_attributes=None):
+def _close_session(route_key, message_text=None, session_attributes=None):
     """Close the IntakeBot session — exits to the contact flow.
 
-    The intent_name determines which branch the contact flow takes:
-      - RouteToCommunityResources → Stability360 Actions agent
-      - RouteToThriveAtWork → Thrive@Work agent
+    Sets the ``selectedRoute`` session attribute so the contact flow can
+    branch using a *Check contact attributes* block:
+      - Attribute type : Lex session attribute
+      - Attribute       : selectedRoute
+      - Conditions       : ``CommunityResources`` or ``ThriveAtWork``
+
+    The intent stays ``IntakeIntent`` (Fulfilled) because Lex V2 does NOT
+    propagate intent-name changes made in a Close response back to
+    Amazon Connect — Connect always sees the original matched intent.
     """
+    attrs = dict(session_attributes or {})
+    attrs['selectedRoute'] = route_key
+
     resp = {
         'sessionState': {
             'dialogAction': {
                 'type': 'Close',
             },
             'intent': {
-                'name': intent_name,
+                'name': 'IntakeIntent',
                 'state': 'Fulfilled',
             },
+            'sessionAttributes': attrs,
         },
     }
-    if session_attributes:
-        resp['sessionState']['sessionAttributes'] = session_attributes
     if message_text:
         resp['messages'] = [
             {
@@ -152,14 +163,14 @@ def _handle_selection(user_input, session_attributes):
 
     if target == 'community':
         return _close_session(
-            'RouteToCommunityResources',
+            'CommunityResources',
             'Connecting you to Community Resources...',
             session_attributes,
         )
 
     if target == 'thrive':
         return _close_session(
-            'RouteToThriveAtWork',
+            'ThriveAtWork',
             'Connecting you to Thrive@Work...',
             session_attributes,
         )
@@ -196,15 +207,23 @@ def handler(event, context):
 
     # FallbackIntent — re-show the menu
     if intent_name == 'FallbackIntent':
-        return _elicit_slot_response(session_attributes=session_attributes)
+        response = _elicit_slot_response(session_attributes=session_attributes)
+        logger.info('Response: %s', json.dumps(response, default=str))
+        return response
 
     # IntakeIntent handling
     if intent_name == 'IntakeIntent':
         user_input = slot_value or input_transcript
         if user_input:
-            return _handle_selection(user_input, session_attributes)
+            response = _handle_selection(user_input, session_attributes)
+            logger.info('Response: %s', json.dumps(response, default=str))
+            return response
         # No input yet — show the ListPicker menu
-        return _elicit_slot_response(session_attributes=session_attributes)
+        response = _elicit_slot_response(session_attributes=session_attributes)
+        logger.info('Response: %s', json.dumps(response, default=str))
+        return response
 
     # Default — show menu
-    return _elicit_slot_response(session_attributes=session_attributes)
+    response = _elicit_slot_response(session_attributes=session_attributes)
+    logger.info('Response: %s', json.dumps(response, default=str))
+    return response

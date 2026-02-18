@@ -1,0 +1,1202 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Stability360 Actions Stack — 6 MCP Action Tools (Scoring Calculator,
+  CharityTracker Submit, Follow-up Scheduler, Customer Profile, Case Status,
+  Resource Lookup).  Single Lambda function with modular routing,
+  API Gateway with inline OpenAPI Body, DynamoDB for records,
+  and AgentCore MCP Gateway.
+
+Parameters:
+  Environment:
+    Type: String
+    Description: 'Deployment environment'
+    Default: 'dev'
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  EnableMcpGateway:
+    Type: String
+    Description: 'Create AgentCore MCP Gateway for AI agent tool access'
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  EnableConnectIntegration:
+    Type: String
+    Description: 'Integrate MCP Gateway with Amazon Connect (CUSTOM_JWT auth)'
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  ConnectInstanceId:
+    Type: String
+    Description: 'Amazon Connect instance ID (required when EnableConnectIntegration is true)'
+    Default: ''
+
+  ConnectInstanceUrl:
+    Type: String
+    Description: 'Amazon Connect instance URL (required when EnableConnectIntegration is true)'
+    Default: ''
+
+  OpenApiSpecUrl:
+    Type: String
+    Description: 'URL to fetch the MCP-facing OpenAPI specification from (YAML format)'
+    Default: ''
+
+  SesSenderEmail:
+    Type: String
+    Description: 'SES verified sender email for CharityTracker notifications'
+    Default: 'godwill.achu.cho@gmail.com'
+
+  CharityTrackerRecipientEmail:
+    Type: String
+    Description: 'Email address to receive CharityTracker submissions'
+    Default: 'godwill.achu.cho@gmail.com'
+
+Conditions:
+  CreateMcpGateway: !Equals [!Ref EnableMcpGateway, 'true']
+  IntegrateWithConnect: !And
+    - !Equals [!Ref EnableMcpGateway, 'true']
+    - !Equals [!Ref EnableConnectIntegration, 'true']
+    - !Not [!Equals [!Ref ConnectInstanceUrl, '']]
+
+Resources:
+
+  # =======================================================
+  # CloudWatch / Logging
+  # =======================================================
+
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+    DeletionPolicy: Delete
+
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}'
+      RetentionInDays: 7
+    DeletionPolicy: Delete
+
+  ActionsLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-actions'
+      RetentionInDays: 7
+    DeletionPolicy: Delete
+
+  IntakeBotLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-intake-bot'
+      RetentionInDays: 7
+    DeletionPolicy: Delete
+
+  IntakeBotRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub '${IntakeBotLogGroup.Arn}:*'
+    DeletionPolicy: Delete
+
+  IntakeBotFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-intake-bot'
+      Runtime: python3.13
+      Handler: lambda_function.handler
+      Role: !GetAtt IntakeBotRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      LoggingConfig:
+        LogGroup: !Ref IntakeBotLogGroup
+      Code:
+        ZipFile: |
+          import json
+          def handler(event, context):
+              return {
+                  'sessionState': {
+                      'dialogAction': {'type': 'Close'},
+                      'intent': {'name': 'IntakeIntent', 'state': 'Fulfilled'}
+                  }
+              }
+    DeletionPolicy: Delete
+
+  # =======================================================
+  # DynamoDB — Actions Table (scoring, submissions, follow-ups)
+  # =======================================================
+
+  ActionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: record_id
+          AttributeType: S
+        - AttributeName: record_type
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: record_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: RecordTypeIndex
+          KeySchema:
+            - AttributeName: record_type
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+    DeletionPolicy: Delete
+
+  # =======================================================
+  # S3 — OpenAPI Spec Bucket
+  # =======================================================
+
+  SpecBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-specs-${AWS::Region}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: Stability360
+        - Key: Component
+          Value: Actions-Specs
+    DeletionPolicy: Delete
+
+  SpecBucketCleanupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3CleanupAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Resource:
+                  - !GetAtt SpecBucket.Arn
+                  - !Sub '${SpecBucket.Arn}/*'
+    DeletionPolicy: Delete
+
+  SpecBucketCleanupFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-spec-cleanup'
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt SpecBucketCleanupRole.Arn
+      Timeout: 300
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          def handler(event, context):
+              try:
+                  bucket = event['ResourceProperties']['BucketName']
+                  if event['RequestType'] == 'Delete':
+                      s3 = boto3.client('s3')
+                      paginator = s3.get_paginator('list_object_versions')
+                      for page in paginator.paginate(Bucket=bucket):
+                          for v in page.get('Versions', []):
+                              s3.delete_object(Bucket=bucket, Key=v['Key'], VersionId=v['VersionId'])
+                          for dm in page.get('DeleteMarkers', []):
+                              s3.delete_object(Bucket=bucket, Key=dm['Key'], VersionId=dm['VersionId'])
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f'Error: {e}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+    DeletionPolicy: Delete
+
+  SpecBucketCleanup:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt SpecBucketCleanupFunction.Arn
+      BucketName: !Ref SpecBucket
+    DependsOn: SpecBucket
+
+  # =======================================================
+  # IAM — Actions Lambda Execution Role
+  # =======================================================
+
+  ActionsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub '${ActionsLambdaLogGroup.Arn}:*'
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt ActionsTable.Arn
+                  - !Sub '${ActionsTable.Arn}/index/*'
+        - PolicyName: SESAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+        - PolicyName: ConnectTasksAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - connect:StartTaskContact
+                Resource: '*'
+        - PolicyName: ConnectCasesAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cases:CreateCase
+                  - cases:GetCase
+                  - cases:SearchCases
+                  - cases:GetDomain
+                  - cases:ListDomains
+                  - cases:ListTemplates
+                  - cases:ListFields
+                  - cases:BatchGetField
+                  - cases:CreateRelatedItem
+                  - connect:ListIntegrationAssociations
+                Resource: '*'
+        - PolicyName: CustomerProfilesAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - profile:SearchProfiles
+                  - profile:CreateProfile
+                  - profile:GetProfile
+                  - profile:ListDomains
+                Resource: '*'
+        - PolicyName: XRayAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+    DeletionPolicy: Delete
+
+  # =======================================================
+  # Lambda — Actions Handler (single function, 6 routes)
+  # =======================================================
+
+  ActionsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-actions'
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt ActionsLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      TracingConfig:
+        Mode: Active
+      LoggingConfig:
+        LogGroup: !Ref ActionsLambdaLogGroup
+        LogFormat: JSON
+      Environment:
+        Variables:
+          ACTIONS_TABLE_NAME: !Ref ActionsTable
+          ENVIRONMENT: !Ref Environment
+          LOG_LEVEL: INFO
+          CONNECT_INSTANCE_ID: !Ref ConnectInstanceId
+          SES_SENDER_EMAIL: !Ref SesSenderEmail
+          CHARITYTRACKER_RECIPIENT_EMAIL: !Ref CharityTrackerRecipientEmail
+          SOPHIA_API_URL: 'https://api-prod-0.sophia-app.com/api/services/search/keyword-search'
+          SOPHIA_TENANT: 'sc-prod-0'
+          SOPHIA_ORIGIN: 'https://www.sc211.org'
+          SOPHIA_MAX_RESULTS: '10'
+      Code:
+        ZipFile: |
+          import json
+          def handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'headers': {'Content-Type': 'application/json'},
+                  'body': json.dumps({
+                      'message': 'Placeholder - deploy real code using deploy.py'
+                  })
+              }
+    DeletionPolicy: Delete
+
+  # =======================================================
+  # API Gateway — Inline OpenAPI Body (hotel template pattern)
+  # All 6 POST endpoints, single Lambda backend
+  # =======================================================
+
+  ActionsApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${AWS::StackName}-actions-api'
+      Description: 'Stability360 Actions API — 6 MCP Tools'
+      Body:
+        openapi: '3.0.1'
+        info:
+          title: 'Stability360 Actions API'
+          description: 'API for Stability360 action tools'
+          version: '1.0.0'
+        paths:
+          /scoring/calculate:
+            post:
+              operationId: 'scoringCalculate'
+              summary: 'Calculate Self-Sufficiency Matrix scores'
+              security:
+                - api_key: []
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: 'object'
+                      required:
+                        - housing_situation
+                        - monthly_income
+                        - monthly_housing_cost
+                        - employment_status
+                      properties:
+                        housing_situation:
+                          type: 'string'
+                        monthly_income:
+                          type: 'number'
+                        monthly_housing_cost:
+                          type: 'number'
+                        employment_status:
+                          type: 'string'
+                        housing_challenges:
+                          type: 'array'
+                          items:
+                            type: 'string'
+                        has_benefits:
+                          type: 'boolean'
+                        monthly_expenses:
+                          type: 'number'
+                        savings_rate:
+                          type: 'number'
+                        fico_range:
+                          type: 'string'
+              responses:
+                '200':
+                  description: 'Scoring results'
+                '400':
+                  description: 'Invalid request'
+                '500':
+                  description: 'Server error'
+              x-amazon-apigateway-integration:
+                type: 'aws_proxy'
+                httpMethod: 'POST'
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActionsFunction.Arn}/invocations'
+          /charitytracker/submit:
+            post:
+              operationId: 'charityTrackerSubmit'
+              summary: 'Submit intake data to CharityTracker'
+              security:
+                - api_key: []
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: 'object'
+                      required:
+                        - client_name
+                        - need_category
+                        - zip_code
+                        - county
+                      properties:
+                        client_name:
+                          type: 'string'
+                        need_category:
+                          type: 'string'
+                        subcategories:
+                          type: 'array'
+                          items:
+                            type: 'string'
+                        zip_code:
+                          type: 'string'
+                        county:
+                          type: 'string'
+                        contact_method:
+                          type: 'string'
+                        contact_info:
+                          type: 'string'
+                        intake_answers:
+                          type: 'object'
+                        extended_intake:
+                          type: 'object'
+                        conversation_summary:
+                          type: 'string'
+                        escalation_tier:
+                          type: 'string'
+                        profile_id:
+                          type: 'string'
+                        timestamp:
+                          type: 'string'
+              responses:
+                '200':
+                  description: 'Submission result'
+                '400':
+                  description: 'Invalid request'
+                '500':
+                  description: 'Server error'
+              x-amazon-apigateway-integration:
+                type: 'aws_proxy'
+                httpMethod: 'POST'
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActionsFunction.Arn}/invocations'
+          /followup/schedule:
+            post:
+              operationId: 'followupSchedule'
+              summary: 'Schedule a client follow-up'
+              security:
+                - api_key: []
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: 'object'
+                      required:
+                        - contact_info
+                        - contact_method
+                        - referral_type
+                        - need_category
+                      properties:
+                        contact_info:
+                          type: 'string'
+                        contact_method:
+                          type: 'string'
+                        referral_type:
+                          type: 'string'
+                        need_category:
+                          type: 'string'
+                        follow_up_message:
+                          type: 'string'
+                        scheduled_days_out:
+                          type: 'integer'
+                        case_id:
+                          type: 'string'
+                        case_reference:
+                          type: 'string'
+                        profile_id:
+                          type: 'string'
+              responses:
+                '200':
+                  description: 'Scheduling result'
+                '400':
+                  description: 'Invalid request'
+                '500':
+                  description: 'Server error'
+              x-amazon-apigateway-integration:
+                type: 'aws_proxy'
+                httpMethod: 'POST'
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActionsFunction.Arn}/invocations'
+          /customer/profile:
+            post:
+              operationId: 'customerProfileLookup'
+              summary: 'Look up or create a customer profile'
+              security:
+                - api_key: []
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: 'object'
+                      required:
+                        - first_name
+                        - last_name
+                      properties:
+                        first_name:
+                          type: 'string'
+                        last_name:
+                          type: 'string'
+                        email:
+                          type: 'string'
+                        phone_number:
+                          type: 'string'
+              responses:
+                '200':
+                  description: 'Profile lookup result'
+                '400':
+                  description: 'Invalid request'
+                '500':
+                  description: 'Server error'
+              x-amazon-apigateway-integration:
+                type: 'aws_proxy'
+                httpMethod: 'POST'
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActionsFunction.Arn}/invocations'
+          /case/status:
+            post:
+              operationId: 'caseStatusLookup'
+              summary: 'Look up a case status by reference number'
+              security:
+                - api_key: []
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: 'object'
+                      required:
+                        - case_reference
+                      properties:
+                        case_reference:
+                          type: 'string'
+              responses:
+                '200':
+                  description: 'Case status result'
+                '400':
+                  description: 'Invalid request'
+                '500':
+                  description: 'Server error'
+              x-amazon-apigateway-integration:
+                type: 'aws_proxy'
+                httpMethod: 'POST'
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActionsFunction.Arn}/invocations'
+          /resources/search:
+            post:
+              operationId: 'resourceLookup'
+              summary: 'Search for community resources via 211 directory'
+              security:
+                - api_key: []
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      type: 'object'
+                      required:
+                        - keyword
+                      properties:
+                        keyword:
+                          type: 'string'
+                        county:
+                          type: 'string'
+                        city:
+                          type: 'string'
+                        zip_code:
+                          type: 'string'
+                        state:
+                          type: 'string'
+                        max_results:
+                          type: 'integer'
+              responses:
+                '200':
+                  description: 'Resource search results'
+                '400':
+                  description: 'Invalid request'
+                '500':
+                  description: 'Server error'
+              x-amazon-apigateway-integration:
+                type: 'aws_proxy'
+                httpMethod: 'POST'
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActionsFunction.Arn}/invocations'
+        components:
+          securitySchemes:
+            api_key:
+              type: 'apiKey'
+              name: 'X-API-Key'
+              in: 'header'
+
+  # Lambda Permission — Allow API Gateway to invoke
+  ActionsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ActionsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ActionsApi}/*/*'
+
+  # =======================================================
+  # API Key + Usage Plan
+  # =======================================================
+
+  ActionsApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub '${AWS::StackName}-api-key'
+      Description: 'API Key for Stability360 Actions (6 MCP Tools)'
+      Enabled: true
+      GenerateDistinctId: true
+
+  ActionsApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiGatewayAccount
+    Properties:
+      RestApiId: !Ref ActionsApi
+
+  ActionsApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref ActionsApi
+      DeploymentId: !Ref ActionsApiDeployment
+      StageName: !Ref Environment
+      TracingEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiLogGroup.Arn
+        Format:
+          '$context.requestId $context.requestTime $context.httpMethod
+          $context.resourcePath $context.status $context.responseLength
+          $context.identity.apiKey'
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+          ThrottlingRateLimit: 50
+          ThrottlingBurstLimit: 25
+
+  ActionsApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ActionsApiStage
+    Properties:
+      UsagePlanName: !Sub '${AWS::StackName}-usage-plan'
+      Throttle:
+        RateLimit: 50
+        BurstLimit: 25
+      Quota:
+        Limit: 10000
+        Period: DAY
+      ApiStages:
+        - ApiId: !Ref ActionsApi
+          Stage: !Ref Environment
+
+  ActionsApiUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ActionsApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ActionsApiUsagePlan
+
+  # =======================================================
+  # Custom Resource — API Key Value Retrieval
+  # (following hotel-api-customer.yaml pattern)
+  # =======================================================
+
+  ApiKeyRetrievalRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ApiGatewayAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - apigateway:GET
+                Resource: !Sub 'arn:aws:apigateway:${AWS::Region}::/apikeys/*'
+    DeletionPolicy: Delete
+
+  ApiKeyRetrievalFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt ApiKeyRetrievalRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          def handler(event, context):
+              response_data = {}
+              try:
+                  print(f"Received event: {json.dumps(event, default=str)}")
+
+                  if event['RequestType'] == 'Delete':
+                      print("Delete request - sending success response")
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+
+                  api_key_id = event['ResourceProperties']['ApiKeyId']
+                  print(f"Getting API key value for: {api_key_id}")
+
+                  client = boto3.client('apigateway')
+                  response = client.get_api_key(apiKey=api_key_id, includeValue=True)
+
+                  api_key_value = response['value']
+                  response_data = {'ApiKeyValue': api_key_value}
+
+                  print(f"Successfully retrieved API key value")
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+
+              except Exception as e:
+                  error_message = f"Error in API Key retrieval: {str(e)}"
+                  print(error_message)
+                  try:
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {
+                          'Error': error_message
+                      })
+                  except Exception as send_error:
+                      print(f"Failed to send error response: {str(send_error)}")
+                      try:
+                          cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      except:
+                          print("Complete failure to send any response to CloudFormation")
+    DeletionPolicy: Delete
+
+  ApiKeyValueRetrieval:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt ApiKeyRetrievalFunction.Arn
+      ApiKeyId: !Ref ActionsApiKey
+    DependsOn: ActionsApiKey
+
+  # =======================================================
+  # Custom Resource — S3 OpenAPI Spec Upload
+  # (following hotel-api-customer.yaml pattern)
+  # =======================================================
+
+  S3UploadRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:GetObject
+                Resource:
+                  - !Sub '${SpecBucket.Arn}'
+                  - !Sub '${SpecBucket.Arn}/*'
+        - PolicyName: CloudFormationAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                Resource: !Ref 'AWS::StackId'
+    DeletionPolicy: Delete
+
+  S3UploadFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt S3UploadRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+          import urllib.request
+          import urllib.error
+          import re
+
+          def fetch_openapi_spec(url):
+              """Fetch OpenAPI spec from URL (supports S3 URIs, S3 HTTPS URLs, and HTTP/HTTPS)"""
+              print(f"Fetching OpenAPI spec from: {url}")
+
+              s3_uri_match = re.match(r's3://([^/]+)/(.+)', url)
+              if s3_uri_match:
+                  bucket = s3_uri_match.group(1)
+                  key = s3_uri_match.group(2)
+                  print(f"Detected S3 URI - Bucket: {bucket}, Key: {key}")
+                  s3_client = boto3.client('s3')
+                  response = s3_client.get_object(Bucket=bucket, Key=key)
+                  content = response['Body'].read().decode('utf-8')
+                  print(f"Successfully fetched from S3 ({len(content)} bytes)")
+                  return content
+
+              s3_https_match = re.match(r'https://([^.]+)\.s3\.([^.]+)\.amazonaws\.com/(.+)', url)
+              if s3_https_match:
+                  bucket = s3_https_match.group(1)
+                  key = s3_https_match.group(3)
+                  print(f"Detected S3 HTTPS URL - Bucket: {bucket}, Key: {key}")
+                  s3_client = boto3.client('s3')
+                  response = s3_client.get_object(Bucket=bucket, Key=key)
+                  content = response['Body'].read().decode('utf-8')
+                  print(f"Successfully fetched from S3 ({len(content)} bytes)")
+                  return content
+
+              print(f"Using HTTP(S) client for URL: {url}")
+              request = urllib.request.Request(url)
+              with urllib.request.urlopen(request) as response:
+                  content = response.read().decode('utf-8')
+                  print(f"Successfully fetched ({len(content)} bytes)")
+                  return content
+
+          def handler(event, context):
+              response_data = {}
+              try:
+                  print(f"Received event: {json.dumps(event, default=str)}")
+
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  openapi_spec_url = event['ResourceProperties'].get('OpenApiSpecUrl', '')
+                  api_gateway_url = event['ResourceProperties']['ApiGatewayUrl']
+
+                  s3 = boto3.client('s3')
+
+                  if event['RequestType'] == 'Delete':
+                      print("Delete request - checking stack status")
+                      try:
+                          cloudformation = boto3.client('cloudformation')
+                          stack_name = event['StackId'].split('/')[-2]
+                          response = cloudformation.describe_stacks(StackName=stack_name)
+                          stack_status = response['Stacks'][0]['StackStatus']
+                          if stack_status in ['DELETE_IN_PROGRESS']:
+                              print("Stack being deleted - cleaning up S3 object")
+                              s3.delete_object(Bucket=bucket_name, Key='openapi.yaml')
+                      except Exception as check_error:
+                          print(f"Could not determine stack status: {str(check_error)}")
+                      physical_resource_id = f"openapi-upload-{bucket_name}"
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {}, physical_resource_id)
+                      return
+
+                  if not openapi_spec_url:
+                      print("OpenApiSpecUrl is empty — skipping upload (deploy.py will handle)")
+                      response_data = {
+                          'S3Location': '',
+                          'BucketName': bucket_name,
+                          'ObjectKey': '',
+                          'Skipped': 'true'
+                      }
+                      physical_resource_id = f"openapi-upload-{bucket_name}"
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physical_resource_id)
+                      return
+
+                  yaml_content = fetch_openapi_spec(openapi_spec_url)
+                  yaml_content = yaml_content.replace('${API_GATEWAY_URL}', api_gateway_url)
+
+                  s3.put_object(
+                      Bucket=bucket_name,
+                      Key='openapi.yaml',
+                      Body=yaml_content,
+                      ContentType='application/x-yaml'
+                  )
+
+                  s3_location = f's3://{bucket_name}/openapi.yaml'
+                  response_data = {
+                      'S3Location': s3_location,
+                      'BucketName': bucket_name,
+                      'ObjectKey': 'openapi.yaml'
+                  }
+                  print(f"Successfully uploaded OpenAPI spec to: {s3_location}")
+
+                  physical_resource_id = f"openapi-upload-{bucket_name}"
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physical_resource_id)
+
+              except Exception as e:
+                  error_message = f"Error in S3 upload: {str(e)}"
+                  print(error_message)
+                  try:
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {
+                          'Error': error_message
+                      })
+                  except Exception as send_error:
+                      print(f"Failed to send error response: {str(send_error)}")
+                      try:
+                          cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                      except:
+                          print("Complete failure to send any response to CloudFormation")
+    DeletionPolicy: Delete
+
+  OpenApiSpecUpload:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt S3UploadFunction.Arn
+      BucketName: !Ref SpecBucket
+      OpenApiSpecUrl: !Ref OpenApiSpecUrl
+      ApiGatewayUrl: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    DependsOn: SpecBucket
+
+  # =======================================================
+  # AgentCore MCP Gateway
+  # =======================================================
+
+  AgentCoreGatewayRole:
+    Type: AWS::IAM::Role
+    Condition: CreateMcpGateway
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: S3ReadOpenApiSpec
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub '${SpecBucket.Arn}/*'
+        - PolicyName: TokenVaultAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: SecretsManagerAccess
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:bedrock-agentcore-identity*'
+              - Sid: AgentCoreTokenVault
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:GetResourceApiKey
+                  - bedrock-agentcore:GetWorkloadAccessToken
+                  - bedrock-agentcore:GetWorkloadAccessTokenForJwt
+                  - bedrock-agentcore:CompleteResourceTokenAuth
+                Resource: '*'
+        - PolicyName: ApiGatewayInvoke
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - execute-api:Invoke
+                Resource:
+                  - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ActionsApi}/*'
+    DeletionPolicy: Delete
+
+  AgentCoreGateway:
+    Type: AWS::BedrockAgentCore::Gateway
+    Condition: CreateMcpGateway
+    Properties:
+      Name: !Sub '${AWS::StackName}-mcp-gw'
+      Description: 'Stability360 Actions MCP Gateway — 6 action tools'
+      ProtocolType: MCP
+      ProtocolConfiguration:
+        Mcp:
+          Instructions: >
+            Use this gateway to access Stability360 action tools:
+            scoringCalculate for Self-Sufficiency Matrix scoring,
+            charityTrackerSubmit for sending intake data to case management,
+            followupSchedule for scheduling client follow-ups,
+            customerProfileLookup for finding or creating customer profiles,
+            caseStatusLookup for checking case status,
+            and resourceLookup for searching community resources.
+          SupportedVersions:
+            - '2025-03-26'
+      AuthorizerType: !If [IntegrateWithConnect, CUSTOM_JWT, AWS_IAM]
+      AuthorizerConfiguration: !If
+        - IntegrateWithConnect
+        - CustomJWTAuthorizer:
+            DiscoveryUrl: !Sub '${ConnectInstanceUrl}/.well-known/openid-configuration'
+            AllowedAudience:
+              - 'placeholder'
+        - !Ref AWS::NoValue
+      RoleArn: !GetAtt AgentCoreGatewayRole.Arn
+      ExceptionLevel: DEBUG
+      Tags:
+        Project: Stability360
+        Component: Actions-MCP
+
+# =======================================================
+# Outputs
+# =======================================================
+
+Outputs:
+  ActionsApiUrl:
+    Description: 'Base URL of the Actions API'
+    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+
+  ScoringEndpoint:
+    Description: 'POST endpoint for scoring calculator'
+    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/scoring/calculate'
+
+  CharityTrackerEndpoint:
+    Description: 'POST endpoint for CharityTracker submission'
+    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/charitytracker/submit'
+
+  FollowupEndpoint:
+    Description: 'POST endpoint for follow-up scheduler'
+    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/followup/schedule'
+
+  CustomerProfileEndpoint:
+    Description: 'POST endpoint for customer profile lookup'
+    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/customer/profile'
+
+  CaseStatusEndpoint:
+    Description: 'POST endpoint for case status lookup'
+    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/case/status'
+
+  ResourcesSearchEndpoint:
+    Description: 'POST endpoint for community resource search'
+    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/resources/search'
+
+  ActionsTableName:
+    Description: 'DynamoDB table for action records'
+    Value: !Ref ActionsTable
+
+  IntakeBotFunctionName:
+    Description: 'Name of the Intake Bot Lambda function'
+    Value: !Ref IntakeBotFunction
+
+  IntakeBotFunctionArn:
+    Description: 'ARN of the Intake Bot Lambda function'
+    Value: !GetAtt IntakeBotFunction.Arn
+
+  ActionsFunctionName:
+    Description: 'Lambda function name'
+    Value: !Ref ActionsFunction
+
+  ActionsFunctionArn:
+    Description: 'Lambda function ARN'
+    Value: !GetAtt ActionsFunction.Arn
+
+  ActionsApiKeyId:
+    Description: 'API Key ID'
+    Value: !Ref ActionsApiKey
+
+  ApiKeyValue:
+    Description: 'API Key value (retrieved by custom resource)'
+    Value: !GetAtt ApiKeyValueRetrieval.ApiKeyValue
+
+  SpecBucketName:
+    Description: 'S3 bucket for OpenAPI spec'
+    Value: !Ref SpecBucket
+
+  OpenApiSpecS3Location:
+    Description: 'S3 location of the uploaded OpenAPI specification'
+    Value: !GetAtt OpenApiSpecUpload.S3Location
+
+  McpGatewayUrl:
+    Description: 'MCP Gateway URL'
+    Value: !GetAtt AgentCoreGateway.GatewayUrl
+    Condition: CreateMcpGateway
+
+  McpGatewayArn:
+    Description: 'MCP Gateway ARN'
+    Value: !GetAtt AgentCoreGateway.GatewayArn
+    Condition: CreateMcpGateway
+
+  McpGatewayId:
+    Description: 'MCP Gateway ID'
+    Value: !GetAtt AgentCoreGateway.GatewayIdentifier
+    Condition: CreateMcpGateway

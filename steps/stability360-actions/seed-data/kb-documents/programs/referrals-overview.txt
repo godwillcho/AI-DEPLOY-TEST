@@ -1,0 +1,59 @@
+REFERRAL PATH OVERVIEW — Stability360 by Trident United Way
+
+WHAT IS A REFERRAL?
+When a client's needs are best served by a community partner agency rather than
+direct Stability360 case management, the AI intake system generates a referral.
+The referral packages the client's information and connects them with the
+appropriate provider.
+
+REFERRAL VS DIRECT SUPPORT
+- REFERRAL: Client is connected to an external community partner that
+  specializes in their specific need.  The client contacts the partner directly
+  or the partner contacts the client.  Stability360 follows up to ensure
+  connection was made.
+- DIRECT SUPPORT: Client's case is handled by the Stability360 case management
+  team.  A case manager is assigned and works directly with the client through
+  the full process.
+
+LIGHT-TOUCH REFERRAL
+Some needs require only a brief connection — for example, providing a phone
+number, address, or website for a specific service.  In these cases:
+- The AI provides the resource information directly during the chat
+- No formal referral packet is generated
+- A brief follow-up may be scheduled to confirm the client connected
+
+FULL REFERRAL
+For more complex needs, a formal referral packet is created:
+- Client information (name, contact, county, ZIP)
+- Need category and subcategories
+- Relevant intake answers
+- Conversation summary
+- Recommended provider(s)
+- The packet is sent to the receiving agency and the client
+
+WHAT HAPPENS AFTER A REFERRAL
+1. Client receives a summary of the referral and provider contact information
+2. The receiving agency is notified (if applicable)
+3. An automated follow-up is scheduled (typically 7 days)
+4. The follow-up checks whether the client connected with the provider
+5. If the client was unable to connect, additional options are offered
+
+TYPICAL REFERRAL TIMELINE
+- Day 0: Referral generated during intake chat
+- Day 0-1: Client contacts provider (or provider contacts client)
+- Day 7: Automated follow-up via preferred contact method
+- Day 14: Second follow-up if no response to first
+- Day 30: Case closed if no further contact needed
+
+REFERRAL CATEGORIES
+Referrals are generated for needs including but not limited to:
+- Food assistance (food banks, SNAP application help, meal programs)
+- Transportation (CARTA bus passes, medical transport, ride programs)
+- Legal services (SC Legal Services, Legal Aid)
+- Employment services (SC Works, job training, resume help)
+- Education and GED programs
+- Disability services (Able SC, vocational rehab)
+- Mental health services (county MHC, counseling)
+- Substance use treatment
+- Senior services (BCDCOG, Meals on Wheels)
+- Veterans services (Mission United, VA)

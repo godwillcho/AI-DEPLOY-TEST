@@ -1,0 +1,101 @@
+INCOME GUIDELINES AND THRESHOLDS
+Stability360 by Trident United Way
+
+This document provides income thresholds for major assistance programs
+available through Stability360 and community partners in the tri-county
+area (Berkeley, Charleston, Dorchester).
+
+All figures are based on the most recent federal guidelines.  Actual
+eligibility may vary by program and funding availability.
+
+===================================================================
+FEDERAL POVERTY LEVEL (FPL) — 2025/2026 GUIDELINES
+===================================================================
+Annual income thresholds by household size:
+
+Household Size    100% FPL      150% FPL      200% FPL
+1                 $15,650       $23,475       $31,300
+2                 $21,150       $31,725       $42,300
+3                 $26,650       $39,975       $53,300
+4                 $32,150       $48,225       $64,300
+5                 $37,650       $56,475       $75,300
+6                 $43,150       $64,725       $86,300
+7                 $48,650       $72,975       $97,300
+8                 $54,150       $81,225       $108,300
+Each additional   +$5,500       +$8,250       +$11,000
+
+Monthly equivalents (divide annual by 12):
+Household Size    100% FPL      150% FPL      200% FPL
+1                 $1,304        $1,956        $2,608
+2                 $1,763        $2,644        $3,525
+3                 $2,221        $3,331        $4,442
+4                 $2,679        $4,019        $5,358
+
+===================================================================
+PROGRAM-SPECIFIC INCOME LIMITS
+===================================================================
+
+LIHEAP (Low Income Home Energy Assistance Program)
+  - Income limit: 150% FPL
+  - Example: Family of 4 must earn below $48,225/year ($4,019/month)
+  - Heating assistance: October – March
+  - Cooling assistance: May – September
+
+SNAP (Supplemental Nutrition Assistance Program)
+  - Gross income limit: 130% FPL
+  - Net income limit: 100% FPL
+  - Example: Family of 4 gross below $41,795/year
+  - Broad-based categorical eligibility may raise gross limit to 200% FPL
+    in SC
+
+MEDICAID (SC Healthy Connections)
+  - Children under 19: up to 208% FPL
+  - Pregnant women: up to 194% FPL
+  - Parents/caretakers: up to 62% FPL
+  - Expansion adults (19-64): up to 138% FPL (if SC expands; currently
+    not expanded — check current status)
+  - Aged/Blind/Disabled: SSI income limits apply
+
+STABILITY360 EMERGENCY FINANCIAL ASSISTANCE
+  - Income guideline: up to 200% FPL
+  - Example: Family of 4 must earn below $64,300/year ($5,358/month)
+  - Case-by-case exceptions for documented emergencies
+  - Priority given to households below 150% FPL
+
+SECTION 8 / HOUSING CHOICE VOUCHER
+  - Income limit: 50% Area Median Income (AMI)
+  - Charleston-North Charleston MSA AMI varies by household size
+  - Typically has long waitlists
+  - Contact local housing authority for current availability
+
+WIC (Women, Infants, and Children)
+  - Income limit: 185% FPL
+  - Example: Family of 4 below $59,478/year
+  - Automatic eligibility if receiving SNAP, Medicaid, or TANF
+
+===================================================================
+AREA MEDIAN INCOME (AMI) — CHARLESTON MSA
+===================================================================
+Used for housing programs (Section 8, HOME, etc.)
+
+Household Size    30% AMI       50% AMI       80% AMI       100% AMI
+1                 $19,450       $32,400       $51,850       $64,800
+2                 $22,200       $37,050       $59,250       $74,100
+3                 $25,000       $41,650       $66,650       $83,300
+4                 $27,750       $46,300       $74,050       $92,500
+
+===================================================================
+HOW TO USE THESE GUIDELINES
+===================================================================
+During intake, the AI system collects the client's household size and
+monthly income.  These values are used to:
+
+1. Determine which programs the client may qualify for
+2. Calculate the Self-Sufficiency Matrix employment and financial scores
+3. Route the client to DIRECT SUPPORT or REFERRAL based on need level
+4. Prioritize cases where income is below 100% FPL
+
+Note: Income guidelines are for initial screening only.  Final eligibility
+is determined by the specific program during their application process.
+The AI system uses conditional language ("you may qualify," "you could be
+eligible") rather than making definitive determinations.

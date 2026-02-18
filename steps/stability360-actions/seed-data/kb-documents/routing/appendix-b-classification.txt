@@ -1,0 +1,128 @@
+APPENDIX B — NEED SUBCATEGORY CLASSIFICATION
+Stability360 by Trident United Way
+
+This document maps every need subcategory to its service path:
+DIRECT SUPPORT (case managed by Stability360 team) or
+REFERRAL (connected to community partner).
+
+===================================================================
+HOUSING
+===================================================================
+rental_assistance              → DIRECT SUPPORT
+mortgage_assistance            → REFERRAL (SC Housing, HUD counseling)
+emergency_shelter              → REFERRAL (One80 Place, Family Promise)
+transitional_housing           → REFERRAL (One80 Place, Windwood Farm)
+permanent_supportive_housing   → REFERRAL (One80 Place, Palmetto Pathways)
+home_repair                    → REFERRAL (Habitat for Humanity, Rebuilding Together)
+eviction_prevention            → DIRECT SUPPORT
+landlord_tenant_dispute        → REFERRAL (SC Legal Services)
+security_deposit               → DIRECT SUPPORT
+fair_housing_complaint         → REFERRAL (SC Human Affairs Commission)
+
+===================================================================
+UTILITIES
+===================================================================
+electric_past_due              → DIRECT SUPPORT
+gas_past_due                   → DIRECT SUPPORT
+water_past_due                 → DIRECT SUPPORT
+shutoff_prevention             → DIRECT SUPPORT (PRIORITY if within 72 hours)
+weatherization                 → REFERRAL (Palmetto CAP)
+liheap_application             → REFERRAL (SC DSS)
+budget_billing_setup           → REFERRAL (utility provider directly)
+
+===================================================================
+FOOD
+===================================================================
+emergency_food                 → REFERRAL (Lowcountry Food Bank, local food pantries)
+snap_application               → REFERRAL (SC DSS)
+wic_enrollment                 → REFERRAL (DHEC WIC)
+meals_on_wheels                → REFERRAL (BCDCOG for seniors)
+school_meal_programs           → REFERRAL (school district)
+food_pantry_locations          → REFERRAL (light-touch — provide locations)
+
+===================================================================
+EMPLOYMENT
+===================================================================
+job_search                     → REFERRAL (SC Works)
+resume_help                    → REFERRAL (SC Works, Goodwill)
+job_training                   → REFERRAL (SC Works, Trident Technical College)
+interview_preparation          → REFERRAL (SC Works, Dress for Success)
+career_counseling              → REFERRAL (SC Works)
+unemployment_benefits          → REFERRAL (SC DEW)
+workplace_rights               → REFERRAL (SC Legal Services)
+
+===================================================================
+TRANSPORTATION
+===================================================================
+bus_pass                       → REFERRAL (CARTA)
+medical_transport              → REFERRAL (LogistiCare, CARTA Para-Transit)
+vehicle_repair                 → REFERRAL (limited programs available)
+gas_assistance                 → DIRECT SUPPORT (limited, case-by-case)
+ride_share_assistance          → DIRECT SUPPORT (limited, case-by-case)
+
+===================================================================
+HEALTHCARE
+===================================================================
+health_insurance_enrollment    → REFERRAL (Navigators, SC Healthy Connections)
+prescription_assistance        → DIRECT SUPPORT
+dental_care                    → REFERRAL (Fetter Health Care, MUSC Dental)
+vision_care                    → REFERRAL (Lions Club, VSP Eyes of Hope)
+mental_health_counseling       → REFERRAL (county MHC, NAMI)
+substance_use_treatment        → REFERRAL (county MHC, FAVOR SC)
+crisis_intervention            → REFERRAL (988 Suicide & Crisis Lifeline, Navigation Center)
+
+===================================================================
+EDUCATION
+===================================================================
+ged_program                    → REFERRAL (Trident Literacy, Adult Ed)
+esh_enrollment                 → REFERRAL (school district)
+college_readiness              → REFERRAL (Trident Technical College)
+financial_aid                  → REFERRAL (school financial aid office)
+tutoring                       → REFERRAL (Communities in Schools)
+english_language_classes        → REFERRAL (Trident Literacy)
+
+===================================================================
+LEGAL
+===================================================================
+legal_consultation             → REFERRAL (SC Legal Services)
+immigration_services           → REFERRAL (SC Legal Services Immigration Unit)
+expungement                    → REFERRAL (SC Legal Services, Bounce Back)
+child_custody                  → REFERRAL (SC Legal Services, Family Court)
+domestic_violence_legal        → REFERRAL (My Sister's House Legal)
+
+===================================================================
+CHILDREN AND FAMILY
+===================================================================
+child_care                     → REFERRAL (Siemer Institute, Child Care Resource)
+after_school_programs          → REFERRAL (Boys & Girls Club, YMCA)
+parenting_classes              → REFERRAL (Siemer Institute, Parents as Teachers)
+foster_care_support            → REFERRAL (SC DSS)
+adoption_resources             → REFERRAL (SC DSS, Adoption Agencies)
+child_abuse_reporting          → REFERRAL (SC DSS Hotline: 1-888-227-3487)
+
+===================================================================
+SENIOR SERVICES
+===================================================================
+senior_benefits                → REFERRAL (BCDCOG Aging Services)
+senior_transportation          → REFERRAL (BCDCOG, CARTA Senior)
+senior_meals                   → REFERRAL (BCDCOG Meals on Wheels)
+caregiver_support              → REFERRAL (BCDCOG, Alzheimer's Association)
+senior_housing                 → REFERRAL (BCDCOG, housing authority)
+
+===================================================================
+VETERAN SERVICES
+===================================================================
+veteran_benefits               → REFERRAL (Mission United, VA)
+veteran_housing                → REFERRAL (Mission United, VA SSVF)
+veteran_employment             → REFERRAL (Mission United, SC Works Veteran)
+veteran_healthcare             → REFERRAL (Charleston VA Medical Center)
+veteran_crisis                 → REFERRAL (Veterans Crisis Line: 988 press 1)
+
+===================================================================
+DISABILITY
+===================================================================
+disability_benefits            → REFERRAL (SC Vocational Rehabilitation)
+disability_housing             → REFERRAL (Able SC)
+disability_employment          → REFERRAL (Able SC, SC Vocational Rehab)
+assistive_technology           → REFERRAL (Able SC)
+disability_advocacy            → REFERRAL (Protection & Advocacy for People with Disabilities)

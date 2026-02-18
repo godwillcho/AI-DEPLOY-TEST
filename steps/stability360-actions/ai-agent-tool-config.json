@@ -1,0 +1,45 @@
+{
+  "_note": "=== MCP TOOL REFERENCE: Auto-configured during deployment ===",
+  "agent": {
+    "name": "stability360-actions-dev-orchestration",
+    "agentId": "c02c04a2-ce6b-4b61-8806-4b92032d472f",
+    "assistantId": "7cce1c51-b13c-490b-9c4f-01fd7c9e66eb",
+    "isDefault": false
+  },
+  "gateway": {
+    "gatewayId": "stability360-actions-dev-mcp-gw-fppf4u255g",
+    "targetName": "stability360-actions-dev-api"
+  },
+  "tools": [
+    {
+      "operationId": "scoringCalculate",
+      "toolName": "stability360_actions_dev_api___scoringCalculate",
+      "toolId": "gateway_stability360-actions-dev-mcp-gw-fppf4u255g__stability360-actions-dev-api___scoringCalculate"
+    },
+    {
+      "operationId": "charityTrackerSubmit",
+      "toolName": "stability360_actions_dev_api___charityTrackerSubmit",
+      "toolId": "gateway_stability360-actions-dev-mcp-gw-fppf4u255g__stability360-actions-dev-api___charityTrackerSubmit"
+    },
+    {
+      "operationId": "followupSchedule",
+      "toolName": "stability360_actions_dev_api___followupSchedule",
+      "toolId": "gateway_stability360-actions-dev-mcp-gw-fppf4u255g__stability360-actions-dev-api___followupSchedule"
+    },
+    {
+      "operationId": "customerProfileLookup",
+      "toolName": "stability360_actions_dev_api___customerProfileLookup",
+      "toolId": "gateway_stability360-actions-dev-mcp-gw-fppf4u255g__stability360-actions-dev-api___customerProfileLookup"
+    },
+    {
+      "operationId": "caseStatusLookup",
+      "toolName": "stability360_actions_dev_api___caseStatusLookup",
+      "toolId": "gateway_stability360-actions-dev-mcp-gw-fppf4u255g__stability360-actions-dev-api___caseStatusLookup"
+    },
+    {
+      "operationId": "resourceLookup",
+      "toolName": "stability360_actions_dev_api___resourceLookup",
+      "toolId": "gateway_stability360-actions-dev-mcp-gw-fppf4u255g__stability360-actions-dev-api___resourceLookup"
+    }
+  ]
+}

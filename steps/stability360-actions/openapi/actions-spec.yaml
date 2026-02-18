@@ -1,0 +1,581 @@
+openapi: "3.0.3"
+info:
+  title: "Stability360 Actions API"
+  description: >
+    API for Stability360 action tools: Self-Sufficiency Matrix scoring,
+    CharityTracker intake submission, and follow-up scheduling.
+    Three POST endpoints backed by a single Lambda function.
+  version: "1.0.0"
+
+servers:
+  - url: "${API_GATEWAY_URL}"
+    description: "API Gateway endpoint"
+
+paths:
+  /scoring/calculate:
+    post:
+      operationId: scoringCalculate
+      summary: "Calculate Self-Sufficiency Matrix scores"
+      description: >
+        Computes housing stability, employment stability, and financial
+        resilience scores (1-5 each), a composite score, priority flag,
+        and recommended service path.  Use this tool after collecting
+        housing, income, and employment data from the client to determine
+        their recommended service path.  The tool performs exact mathematical
+        scoring — do not attempt to calculate scores yourself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - housing_situation
+                - monthly_income
+                - monthly_housing_cost
+                - employment_status
+              properties:
+                housing_situation:
+                  type: string
+                  description: "Housing situation category"
+                  enum:
+                    - homeless
+                    - shelter
+                    - couch_surfing
+                    - temporary
+                    - transitional
+                    - renting_unstable
+                    - renting_month_to_month
+                    - renting_stable
+                    - owner_with_mortgage
+                    - owner
+                    - owner_no_mortgage
+                monthly_income:
+                  type: number
+                  description: "Gross monthly income in USD"
+                  minimum: 0
+                monthly_housing_cost:
+                  type: number
+                  description: "Monthly housing cost (rent or mortgage) in USD"
+                  minimum: 0
+                housing_challenges:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - past_due
+                      - overcrowded
+                      - unsafe
+                      - no_utilities
+                      - eviction_notice
+                      - shutoff_notice
+                  description: "Current housing challenges"
+                employment_status:
+                  type: string
+                  description: "Employment situation"
+                  enum:
+                    - unable_to_work
+                    - unemployed
+                    - gig_work
+                    - seasonal
+                    - part_time
+                    - full_time_below_standard
+                    - self_employed
+                    - student
+                    - retired
+                    - full_time
+                    - full_time_above_standard
+                has_benefits:
+                  type: boolean
+                  description: "Whether the person has employer-provided benefits"
+                  default: false
+                monthly_expenses:
+                  type: number
+                  description: "Total monthly expenses in USD"
+                  minimum: 0
+                savings_rate:
+                  type: number
+                  description: "Savings rate as decimal (0.03 = 3%)"
+                  minimum: 0
+                  maximum: 1
+                fico_range:
+                  type: string
+                  description: "FICO credit score range"
+                  enum:
+                    - below_580
+                    - "580-669"
+                    - "670-739"
+                    - "740-799"
+                    - "800+"
+                    - unknown
+      responses:
+        "200":
+          description: "Scoring results"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  record_id:
+                    type: string
+                    description: "Unique ID for this scoring record"
+                  housing_score:
+                    type: number
+                    description: "Housing stability score (1-5)"
+                  employment_score:
+                    type: number
+                    description: "Employment stability score (1-5)"
+                  financial_resilience_score:
+                    type: number
+                    description: "Financial resilience score (1-5)"
+                  composite_score:
+                    type: number
+                    description: "Average of all 3 domain scores"
+                  priority_flag:
+                    type: boolean
+                    description: "True if any domain score is 1 or critical trigger present"
+                  recommended_path:
+                    type: string
+                    description: "Recommended service path"
+                    enum:
+                      - direct_support
+                      - mixed
+                      - referral
+                  scoring_details:
+                    type: object
+                    description: "Detailed breakdown of each domain score"
+      security:
+        - apiKeyAuth: []
+
+  /charitytracker/submit:
+    post:
+      operationId: charityTrackerSubmit
+      summary: "Submit intake data to CharityTracker"
+      description: >
+        Assembles all session data into a structured payload and sends it
+        to the case management team via email.  Use this tool when a Direct
+        Support intake is complete and all required fields have been collected.
+        Always confirm with the client before submitting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - client_name
+                - need_category
+                - zip_code
+                - county
+              properties:
+                client_name:
+                  type: string
+                  description: "Client's first name"
+                need_category:
+                  type: string
+                  description: "Primary need category (housing, food, utilities, etc.)"
+                subcategories:
+                  type: array
+                  items:
+                    type: string
+                  description: "Specific subcategories of need"
+                zip_code:
+                  type: string
+                  description: "Client's ZIP code"
+                  pattern: "^[0-9]{5}$"
+                county:
+                  type: string
+                  description: "Client's county"
+                  enum:
+                    - Berkeley
+                    - Charleston
+                    - Dorchester
+                contact_method:
+                  type: string
+                  description: "Preferred contact method"
+                  enum:
+                    - email
+                    - phone
+                    - text
+                contact_info:
+                  type: string
+                  description: "Email address or phone number"
+                intake_answers:
+                  type: object
+                  description: "Intake questionnaire answers"
+                extended_intake:
+                  type: object
+                  description: "Extended intake fields for specific programs"
+                conversation_summary:
+                  type: string
+                  description: "AI-generated summary of the conversation"
+                escalation_tier:
+                  type: string
+                  description: "Service tier classification"
+                  enum:
+                    - direct_support
+                    - referral
+                    - mixed
+                profile_id:
+                  type: string
+                  description: "Customer profile ID from customerProfileLookup (associates case with profile)"
+                timestamp:
+                  type: string
+                  description: "ISO 8601 timestamp"
+      responses:
+        "200":
+          description: "Submission result"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  record_id:
+                    type: string
+                    description: "Unique submission record ID"
+                  sent:
+                    type: boolean
+                    description: "Whether the email was sent successfully"
+                  message_id:
+                    type: string
+                    description: "SES message ID if sent"
+                  payload_summary:
+                    type: string
+                    description: "Human-readable summary of the submission"
+                  case_id:
+                    type: string
+                    description: "Amazon Connect Case ID (created for all submissions)"
+                  case_reference:
+                    type: string
+                    description: "Amazon Connect Cases reference number (numeric) — share this with the client"
+      security:
+        - apiKeyAuth: []
+
+  /followup/schedule:
+    post:
+      operationId: followupSchedule
+      summary: "Schedule a client follow-up"
+      description: >
+        Schedules a follow-up action after intake completion.  For referrals,
+        schedules an automated check-in.  For Direct Support, creates a task
+        for the case manager queue.  Use this tool after delivering a referral
+        or after submitting a Direct Support payload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - contact_info
+                - contact_method
+                - referral_type
+                - need_category
+              properties:
+                contact_info:
+                  type: string
+                  description: "Client's email or phone number"
+                contact_method:
+                  type: string
+                  description: "How to reach the client"
+                  enum:
+                    - email
+                    - phone
+                    - text
+                referral_type:
+                  type: string
+                  description: "Service path that was provided"
+                  enum:
+                    - referral
+                    - direct_support
+                need_category:
+                  type: string
+                  description: "The need category this follow-up relates to"
+                follow_up_message:
+                  type: string
+                  description: "Message to include in the follow-up"
+                  default: "We're checking in to see if you received the support you needed. Do you need additional help?"
+                scheduled_days_out:
+                  type: integer
+                  description: "Number of days from now to schedule the follow-up"
+                  minimum: 1
+                  maximum: 90
+                  default: 7
+                case_id:
+                  type: string
+                  description: "Case ID from CharityTracker submission (links follow-up to existing case)"
+                case_reference:
+                  type: string
+                  description: "Case reference from CharityTracker submission (links follow-up to existing case)"
+                profile_id:
+                  type: string
+                  description: "Customer profile ID from customerProfileLookup (associates case with profile)"
+      responses:
+        "200":
+          description: "Scheduling result"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scheduled:
+                    type: boolean
+                    description: "Whether the follow-up was scheduled"
+                  follow_up_id:
+                    type: string
+                    description: "Unique follow-up record ID"
+                  scheduled_date:
+                    type: string
+                    description: "ISO 8601 date when follow-up will occur"
+                  method:
+                    type: string
+                    description: "Follow-up method used"
+                  need_category:
+                    type: string
+                  referral_type:
+                    type: string
+                  case_id:
+                    type: string
+                    description: "Amazon Connect Case ID"
+                  case_reference:
+                    type: string
+                    description: "Amazon Connect Cases reference number (numeric) — share this with the client"
+      security:
+        - apiKeyAuth: []
+
+  /case/status:
+    post:
+      operationId: caseStatusLookup
+      summary: "Look up a case status by reference number"
+      description: >
+        Allows clients to check the status of their case using the case
+        reference number (a numeric ID).  The reference number is provided
+        when a case is created through charityTrackerSubmit or
+        followupSchedule.  Use this tool when a client asks about the status
+        of their case.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - case_reference
+              properties:
+                case_reference:
+                  type: string
+                  description: "Case reference number (numeric ID from Amazon Connect Cases)"
+      responses:
+        "200":
+          description: "Case status result"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  found:
+                    type: boolean
+                    description: "Whether the case was found"
+                  case_reference:
+                    type: string
+                    description: "The case reference number"
+                  status:
+                    type: string
+                    description: "Current case status (open, in_progress, pending, resolved, closed)"
+                  status_description:
+                    type: string
+                    description: "Human-readable description of the status"
+                  need_category:
+                    type: string
+                    description: "The need category for this case"
+                  escalation_tier:
+                    type: string
+                    description: "Service tier classification"
+                  created_at:
+                    type: string
+                    description: "When the case was created (ISO 8601)"
+                  county:
+                    type: string
+                    description: "Client's county"
+                  message:
+                    type: string
+                    description: "Message to deliver to the client about their case status"
+      security:
+        - apiKeyAuth: []
+
+  /resources/search:
+    post:
+      operationId: resourceLookup
+      summary: "Search for community resources via 211 directory"
+      description: >
+        Searches the SC 211 community resource directory for services matching
+        a keyword and location.  Returns provider name, description, address,
+        phone, URL, eligibility, and fees.  Use this tool when a client needs
+        community resource referrals (food, utilities, housing, healthcare, etc.)
+        in their area.  The keyword should describe the type of help needed.
+        Include county and/or zip_code for more relevant results.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - keyword
+              properties:
+                keyword:
+                  type: string
+                  description: "Search keyword describing the type of help needed (e.g., 'food assistance', 'utility bill help', 'housing')"
+                county:
+                  type: string
+                  description: "County to search in (e.g., Berkeley, Charleston, Dorchester)"
+                city:
+                  type: string
+                  description: "City to narrow results"
+                zip_code:
+                  type: string
+                  description: "ZIP code to narrow results"
+                state:
+                  type: string
+                  description: "State (defaults to South Carolina)"
+                  default: "South Carolina"
+                max_results:
+                  type: integer
+                  description: "Maximum number of results to return (1-20)"
+                  minimum: 1
+                  maximum: 20
+                  default: 10
+      responses:
+        "200":
+          description: "Resource search results"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  found:
+                    type: boolean
+                    description: "Whether any matching resources were found"
+                  results:
+                    type: array
+                    description: "List of matching community resources"
+                    items:
+                      type: object
+                      properties:
+                        service_name:
+                          type: string
+                          description: "Name of the service"
+                        organization:
+                          type: string
+                          description: "Organization providing the service"
+                        description:
+                          type: string
+                          description: "Description of the service"
+                        address:
+                          type: string
+                          description: "Physical address"
+                        phones:
+                          type: array
+                          items:
+                            type: string
+                          description: "Phone numbers"
+                        url:
+                          type: string
+                          description: "Website URL"
+                        eligibility:
+                          type: string
+                          description: "Eligibility requirements"
+                        fees:
+                          type: string
+                          description: "Fee information"
+                  total_count:
+                    type: integer
+                    description: "Total number of matching resources in the directory"
+                  showing:
+                    type: integer
+                    description: "Number of results returned in this response"
+                  message:
+                    type: string
+                    description: "Summary message about the search results"
+                  source:
+                    type: string
+                    description: "Data source identifier"
+      security:
+        - apiKeyAuth: []
+
+  /customer/profile:
+    post:
+      operationId: customerProfileLookup
+      summary: "Look up or create a customer profile"
+      description: >
+        Searches Amazon Connect Customer Profiles for an existing customer
+        by email or phone number.  If no match is found, creates a new profile.
+        Use this tool after the client consents to data collection and provides
+        their basic contact information (first name, last name, and at least
+        one of email or phone number).  The returned profile_id should be passed
+        to charityTrackerSubmit and followupSchedule to associate cases with
+        the customer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - first_name
+                - last_name
+              properties:
+                first_name:
+                  type: string
+                  description: "Client's first name"
+                last_name:
+                  type: string
+                  description: "Client's last name"
+                email:
+                  type: string
+                  description: "Client's email address"
+                phone_number:
+                  type: string
+                  description: "Client's phone number"
+      responses:
+        "200":
+          description: "Profile lookup result"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profile_id:
+                    type: string
+                    description: "Customer profile ID"
+                  is_returning:
+                    type: boolean
+                    description: "True if this is an existing customer"
+                  first_name:
+                    type: string
+                  last_name:
+                    type: string
+                  email:
+                    type: string
+                  phone_number:
+                    type: string
+                  message:
+                    type: string
+                    description: "Greeting message for the customer"
+                  sessionAttributes:
+                    type: object
+                    description: "Session attributes to persist (includes profile_id)"
+                    additionalProperties:
+                      type: string
+      security:
+        - apiKeyAuth: []
+
+security:
+  - apiKeyAuth: []
+
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key

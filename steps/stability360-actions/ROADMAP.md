@@ -6,335 +6,151 @@
 
 ---
 
-## What This Step Delivers
+## Architecture
+
+- **Single Lambda function** with a router (`index.py`) dispatching to 3 modular action files
+- **Single API Gateway** with 3 POST endpoints, all backed by the same Lambda
+- **Single MCP Gateway** with 1 target (OpenAPI spec defines all 3 operations)
+- **New AI Agent** — created separately, NOT set as default. Has only the 3 action tools + Retrieve
+- **No employee data** — this agent cannot query employee records
+- **KB expansion** — public-facing documents seeded to the existing thrive-at-work KB bucket
+
+---
+
+## File Structure
 
 ```
 steps/stability360-actions/
-  deploy.py                          # Single deploy script (same pattern as thrive-at-work)
+  deploy.py                          # Single deploy script (13 steps)
   stability360-actions-stack.yaml    # CloudFormation template
-  openapi/actions-spec.yaml          # OpenAPI spec (3 endpoints)
-  prompts/orchestration-prompt.txt   # Updated prompt (adds 3 new tools + KB2 instructions)
+  openapi/actions-spec.yaml          # OpenAPI spec (3 endpoints, 1 API)
+  prompts/orchestration-prompt.txt   # Orchestration prompt for actions agent
   lambda/
-    scoring_calculator/index.py      # MCP Tool 2 — Self-Sufficiency Matrix
-    charitytracker_payload/index.py  # MCP Tool 3 — Build payload + SES email
-    followup_scheduler/index.py      # MCP Tool 4 — Connect Tasks / Outbound
+    actions/                         # Single Lambda — modular routing
+      index.py                       #   Router: path + MCP tool dispatch
+      scoring_calculator.py          #   MCP Tool: Self-Sufficiency Matrix
+      charitytracker_payload.py      #   MCP Tool: Build payload + SES email
+      followup_scheduler.py          #   MCP Tool: Follow-up scheduling
   seed-data/
     kb-documents/
       programs/                      # KB1 expansion — program details
-        utility-assistance.txt       #   Utility assistance program (extended intake fields, priority rules)
-        referrals-overview.txt       #   Referrals light-touch description
-        emergency-financial.txt      #   Emergency financial assistance
-        eap-expanded.txt             #   EAP services expanded
+        utility-assistance.txt
+        referrals-overview.txt
+        emergency-financial.txt
+        eap-expanded.txt
       routing/                       # KB1 expansion — path classification
-        appendix-b-classification.txt#   All subcategories → referral vs direct support
-        zip-county-agency.txt        #   ZIP → county → agency routing
+        appendix-b-classification.txt
+        zip-county-agency.txt
       eligibility/                   # KB1 expansion — eligibility rules
-        age-children-military.txt    #   Age 65+, children under 18, veteran routing
-        employment-routing.txt       #   Employed/unemployed/retired/student routing
-        income-guidelines.txt        #   Income thresholds for programs
+        age-children-military.txt
+        employment-routing.txt
+        income-guidelines.txt
       faq/                           # KB1 expansion — public FAQ
-        what-is-stability360.txt     #   General "What is Stability360?" content
-        what-to-expect.txt           #   What happens during and after intake
-        document-requirements.txt    #   What to bring / what's needed
-        hours-and-contact.txt        #   Operating hours, contact methods
-      211-resources/                 # KB2 content — 211 community resources
-        berkeley-county.txt          #   All Berkeley County providers
-        charleston-county.txt        #   All Charleston County providers
-        dorchester-county.txt        #   All Dorchester County providers
-        tri-county-services.txt      #   Providers serving all 3 counties
-        hotlines-and-crisis.txt      #   24/7 hotlines, crisis numbers
+        what-is-stability360.txt
+        what-to-expect.txt
+        document-requirements.txt
+        hours-and-contact.txt
+      211-resources/                 # 211 community resources by county
+        berkeley-county.txt
+        charleston-county.txt
+        dorchester-county.txt
+        tri-county-services.txt
+        hotlines-and-crisis.txt
 ```
 
 ---
 
-## CloudFormation Stack: `stability360-actions-stack.yaml`
+## CloudFormation Stack
 
 | Resource | Purpose |
 |----------|---------|
-| `ScoringResultsTable` (DynamoDB) | Stores computed matrix scores for reporting |
-| `ScoringCalculatorFunction` (Lambda) | MCP Tool 2 — housing ratio, employment score, financial resilience, composite |
-| `CharityTrackerFunction` (Lambda) | MCP Tool 3 — assemble payload from session → send via SES |
-| `FollowupSchedulerFunction` (Lambda) | MCP Tool 4 — create Connect Task or trigger outbound follow-up |
-| `ActionsApi` (API Gateway) | 3 POST endpoints exposed for MCP |
+| `ActionsTable` (DynamoDB) | Stores scoring results, submissions, follow-ups |
+| `ActionsFunction` (Lambda) | Single function routing to 3 action modules |
+| `ActionsApi` (API Gateway) | 3 POST endpoints: /scoring/calculate, /charitytracker/submit, /followup/schedule |
 | `ActionsApiKey` (API Key) | Auth for MCP Gateway |
-| IAM roles | Scoped: SES send, DynamoDB write, Connect Tasks API |
-| CloudWatch log groups | Per-function logging |
+| `SpecBucket` (S3) | Stores OpenAPI spec for MCP target |
+| `AgentCoreGateway` (MCP) | MCP Gateway for 3 action tools |
+| IAM roles | Scoped: DynamoDB write, SES send, Connect Tasks API |
+| CloudWatch log groups | Lambda and API Gateway logging |
 
 ---
 
-## MCP Tools (3 New)
+## MCP Tools (3)
 
-### Tool 2: Scoring Calculator
+### Scoring Calculator — `POST /scoring/calculate`
+- Computes housing (1-5), employment (1-5), financial resilience (1-5) scores
+- Composite score = average. ANY domain=1 → PRIORITY. <2.5 → direct_support. 2.5-3.5 → mixed. >3.5 → referral
+- For case manager facilitated sessions ONLY (not regular chat)
 
-**Endpoint:** `POST /scoring/calculate`
+### CharityTracker Payload — `POST /charitytracker/submit`
+- Assembles structured HTML email from intake session data
+- Sends via SES to configured CharityTracker inbox
+- Always confirm with client before submitting
+- Demo mode: sends to test email (SES sandbox)
 
-**Input:**
-```json
-{
-  "housing_situation": "renting_stable|temporary|homeless|...",
-  "monthly_income": 2800,
-  "monthly_housing_cost": 950,
-  "housing_challenges": ["past_due", "overcrowded"],
-  "employment_status": "full_time_below_standard|part_time|...",
-  "has_benefits": true,
-  "monthly_expenses": 2600,
-  "savings_rate": 0.03,
-  "fico_range": "580-669"
-}
-```
-
-**Output:**
-```json
-{
-  "housing_score": 3,
-  "employment_score": 2,
-  "financial_resilience_score": 2,
-  "composite_score": 2.33,
-  "priority_flag": false,
-  "recommended_path": "direct_support",
-  "scoring_details": { ... }
-}
-```
-
-**Logic (from Appendix C):**
-- Housing: ratio-based (cost/income), situation category, challenges count → Score 1-5
-- Employment: situation + income vs standard + benefits → Score 1-5
-- Financial: expenses vs income + savings rate + FICO → Score 1-5
-- Composite: average of 3. ANY domain=1 → PRIORITY. Avg < 2.5 → direct support. Avg 2.5-3.5 → mixed. Avg > 3.5 → referral
-- Results stored in DynamoDB for reporting
-
-### Tool 3: CharityTracker Payload + SES
-
-**Endpoint:** `POST /charitytracker/submit`
-
-**Input:**
-```json
-{
-  "client_name": "Jane",
-  "need_category": "housing",
-  "subcategories": ["rental_assistance"],
-  "zip_code": "29401",
-  "county": "Charleston",
-  "contact_method": "email",
-  "contact_info": "jane@example.com",
-  "intake_answers": { ... },
-  "extended_intake": { ... },
-  "conversation_summary": "Client needs rental assistance...",
-  "escalation_tier": "direct_support",
-  "timestamp": "2026-02-17T12:00:00Z"
-}
-```
-
-**Output:**
-```json
-{
-  "sent": true,
-  "message_id": "ses-message-id",
-  "payload_summary": "Direct Support submission for housing/rental_assistance in Charleston County"
-}
-```
-
-**Logic:**
-- Assemble structured HTML email from all session fields
-- Send via SES to configured CharityTracker inbox (env var)
-- Demo mode: send to a test email address
-- Store submission record in DynamoDB for audit
-
-### Tool 4: Follow-up Scheduler
-
-**Endpoint:** `POST /followup/schedule`
-
-**Input:**
-```json
-{
-  "contact_info": "jane@example.com",
-  "contact_method": "email",
-  "referral_type": "referral|direct_support",
-  "need_category": "food",
-  "follow_up_message": "Did you receive food assistance? Do you need additional help?",
-  "scheduled_days_out": 7
-}
-```
-
-**Output:**
-```json
-{
-  "scheduled": true,
-  "follow_up_id": "uuid",
-  "scheduled_date": "2026-02-24T12:00:00Z",
-  "method": "connect_task"
-}
-```
-
-**Logic:**
-- Referral path → schedule automated follow-up (Connect Task or SES)
-- Direct Support path → create task for case manager queue
-- Store in DynamoDB with status tracking
-- Demo mode: log the scheduled follow-up, create DynamoDB record
+### Follow-up Scheduler — `POST /followup/schedule`
+- Referral path → automated follow-up (email or Connect Task)
+- Direct Support → case manager task
+- Demo mode: DynamoDB record only (no real tasks)
 
 ---
 
-## KB Expansion — Folder Structure
+## Deploy Script
 
-All documents uploaded to the **existing** KB bucket. No employee data — strictly public-facing content.
-
-### `programs/` — Expanded Program Docs
-
-| Document | Content |
-|----------|---------|
-| `utility-assistance.txt` | Full utility assistance program: LIHEAP, ShelterNet, Santee Cooper. Extended intake fields (utility type, provider, amount past due, shutoff date). 72-hour shutoff = PRIORITY escalation rule. |
-| `referrals-overview.txt` | Referral path explained: what happens, who contacts you, typical timeline. Light-touch vs full referral. |
-| `emergency-financial.txt` | Emergency financial assistance: rent, utilities, prescriptions. Eligibility, what to bring, process. |
-| `eap-expanded.txt` | Employee Assistance Program expanded: counseling sessions, financial coaching, legal consultation, work-life balance. |
-
-### `routing/` — Path Classification & Agency Routing
-
-| Document | Content |
-|----------|---------|
-| `appendix-b-classification.txt` | Complete subcategory → path mapping. Every need subcategory classified as REFERRAL or DIRECT SUPPORT. Used by the AI to route automatically. |
-| `zip-county-agency.txt` | ZIP code → county → agency routing. Berkeley → Santee Cooper/BRCC. Charleston → NCRCC/CRCC. Dorchester → DRCC. Out-of-area handling. |
-
-### `eligibility/` — Eligibility Rules
-
-| Document | Content |
-|----------|---------|
-| `age-children-military.txt` | Age 65+ → BCDCOG senior programs. Children under 18 → Siemer Institute. Veteran/Active → Mission United. |
-| `employment-routing.txt` | Full-time, part-time, unemployed, self-employed, retired, student, unable to work → routing rules for each. |
-| `income-guidelines.txt` | Federal Poverty Level thresholds, LIHEAP income limits, program-specific income requirements. |
-
-### `faq/` — Public FAQ
-
-| Document | Content |
-|----------|---------|
-| `what-is-stability360.txt` | "Stability360 is a program operated by Trident United Way..." Overview, mission, service area. |
-| `what-to-expect.txt` | What happens during chat, after intake, referral timeline, follow-up process. |
-| `document-requirements.txt` | What to bring to appointments: ID, proof of income, utility bills, lease, etc. |
-| `hours-and-contact.txt` | Operating hours, phone numbers, walk-in vs appointment, after-hours message. |
-
-### `211-resources/` — Community Resources by County
-
-Chunked from `sc211_tricounty_resources.md`:
-
-| Document | Content |
-|----------|---------|
-| `berkeley-county.txt` | All Berkeley-specific providers: TUW Berkeley Center, Wesley Food Pantry, Santee Cooper, Berkeley MHC, Habitat Berkeley, Berkeley VA, Berkeley Emergency Mgmt, etc. |
-| `charleston-county.txt` | All Charleston-specific providers: ShelterNet, East Cooper Outreach, Neighbors Together, City of Charleston Rehab, Charleston Emergency Mgmt, Star Gospel, Bounce Back, etc. |
-| `dorchester-county.txt` | All Dorchester-specific providers: TUW Dorchester Center, ShelterNet Dorchester, Dorchester GED, CIFC Dental, Dorchester Emergency Svcs, etc. |
-| `tri-county-services.txt` | Providers serving all 3 counties: Palmetto CAP, One80 Place, Lowcountry Food Bank, SC Legal Services, CARTA, SC Works, Fetter, Able SC, Navigation Center, etc. |
-| `hotlines-and-crisis.txt` | All 24/7 crisis lines: 211, My Sister's House, Tri-County SPEAKS, Charleston/Dorchester MHC Crisis, Navigation Center, etc. |
-
----
-
-## Deploy Script: `deploy.py`
-
-Follows the exact same pattern as `steps/thrive-at-work/deploy.py`:
-
-```
-deploy.py \
-  --stack-name stability360-actions \
+```bash
+python deploy.py \
+  --stack-name stability360-actions-prod \
   --region us-east-1 \
   --environment prod \
   --enable-mcp \
-  --connect-instance-id <ID>
+  --connect-instance-id <ID> \
+  --thrive-stack-name stability360-thrive-at-work-prod
 ```
 
-### Deployment Steps
+### Deployment Steps (13)
 
 | Step | Action |
 |------|--------|
-| 1 | Deploy CloudFormation stack (DynamoDB + 3 Lambdas + API Gateway) |
+| 1 | Deploy CloudFormation stack (DynamoDB + Lambda + API GW + MCP GW) |
 | 2 | Retrieve stack outputs |
-| 3 | Update Lambda function code (scoring, charitytracker, followup) |
-| 4 | Upload OpenAPI spec to S3 |
-| 5 | Register API key in AgentCore Identity |
-| 6 | Configure MCP REST API target (3 tools via OpenAPI) |
-| 7 | Update gateway AllowedAudience |
-| 8 | Register MCP server with Connect |
-| 9 | Seed KB expansion documents to existing KB bucket |
-| 10 | Seed 211 resource documents to existing KB bucket |
-| 11 | Update AI Agent — add 3 new tools + update prompt with new tool instructions |
-| 12 | Update security profile with new MCP tool permissions |
+| 3 | Update Lambda code (single function, 4 Python files) |
+| 4 | Seed KB expansion + 211 documents to thrive KB bucket |
+| 5 | Upload OpenAPI spec to S3 |
+| 6 | Register API key in AgentCore Identity |
+| 7 | Create MCP REST API target (3 tools via OpenAPI) |
+| 8 | Update gateway AllowedAudience |
+| 9 | Register MCP server with Connect |
+| 10 | Create security profile + MCP tool permissions |
+| 11 | Create orchestration prompt |
+| 12 | Create AI Agent (NOT default) with 3 MCP tools + Retrieve |
 | 13 | Generate MCP tool config reference |
 
 ### Key Design Decisions
 
-1. **Reuses existing KB bucket** — documents are uploaded to the same S3 bucket and Q Connect knowledge base from thrive-at-work. No separate KB2 needed since folder structure provides organization.
+1. **Single Lambda + Single API** — one function handles all 3 actions via path-based routing. Separate Python modules keep code organized.
 
-2. **Separate MCP Gateway target** — the 3 action tools are a separate API Gateway and a separate MCP target registration, keeping concerns separated from the employee lookup tool.
+2. **New AI Agent (not default)** — a separate agent with only the 3 action tools and Retrieve. Does not replace or modify the thrive-at-work agent. Not set as default for self-service.
 
-3. **Updates existing AI Agent** — adds 3 new tool configurations to the existing agent (doesn't create a new agent). The orchestration prompt is updated to include instructions for when to use each new tool.
+3. **No employee data** — this agent has no access to the employee lookup tool. KB documents are strictly public-facing content.
 
-4. **Demo-ready defaults** — CharityTracker email defaults to a test address. Follow-up scheduler creates DynamoDB records instead of real Connect Tasks in demo mode. Scoring uses demo thresholds from Appendix C.
+4. **Reuses existing KB bucket** — documents seeded to the thrive-at-work KB bucket under `stability360/` prefix. Q Connect knowledge base picks them up automatically.
 
-5. **SES setup** — verifies sender identity in SES. Demo mode uses SES sandbox (verified recipient only). Production mode requires SES production access request.
+5. **Separate MCP Gateway** — own gateway, own target, own security profile. Fully independent from thrive-at-work MCP.
 
----
-
-## Updated Orchestration Prompt Additions
-
-The existing prompt gets extended with instructions for 3 new tools:
-
-```
-## Tool: ScoringCalculator
-Use this tool ONLY when a live agent requests a Self-Sufficiency Matrix score during
-a facilitated session. Never invoke this during a regular client chat. The tool
-performs exact mathematical scoring — do not attempt to calculate scores yourself.
-
-## Tool: CharityTrackerPayload
-Use this tool when a Direct Support intake is complete and all required fields have
-been collected. Assembles the full session data into a structured payload and sends
-it to the case management team. Always confirm with the client before submitting.
-
-## Tool: FollowupScheduler
-Use this tool after delivering a referral (schedule automated follow-up) or after
-submitting a Direct Support payload (create task for case manager). The follow-up
-ensures closed-loop tracking.
-```
-
-And KB retrieval instructions are expanded:
-
-```
-## 211 Community Resources
-When a client needs a referral to community services, search the knowledge base with
-the client's need category AND county. Results come from the 211 resource directory.
-Always include: provider name, phone number, address, eligibility notes, and hours
-when available. If no match found, direct client to dial 211.
-```
+6. **Demo-ready defaults** — CharityTracker sends to test email. Follow-up creates DynamoDB records only. Scoring uses Appendix C thresholds.
 
 ---
 
 ## Verification Checklist
 
-After deployment:
-
 - [ ] CloudFormation stack creates successfully
-- [ ] All 3 Lambda functions respond to test invocations
-- [ ] API Gateway returns valid responses for all 3 endpoints
+- [ ] Lambda function responds to all 3 endpoints
+- [ ] API Gateway returns valid responses with API key
 - [ ] MCP tools appear in Connect security profile
-- [ ] KB expansion documents appear in Q Connect knowledge base (search test)
-- [ ] 211 resource documents return correct providers by county (search test)
-- [ ] AI Agent responds using new tools when prompted
-- [ ] Scoring Calculator returns correct scores for known test inputs
+- [ ] KB expansion documents return in Q Connect searches
+- [ ] 211 resources return correct providers by county
+- [ ] AI Agent created (not default) with 3 tools
+- [ ] Scoring Calculator returns correct scores for test inputs
 - [ ] CharityTracker sends test email via SES
 - [ ] Follow-up Scheduler creates DynamoDB record
-- [ ] Existing thrive-at-work functionality still works (employee lookup, greeting, intake bot)
-- [ ] Both environments (dev us-west-2, prod us-east-1) deploy successfully
-
----
-
-## Execution Order
-
-```
-1. Write CloudFormation template (stack.yaml)
-2. Write 3 Lambda functions
-3. Write OpenAPI spec (3 endpoints)
-4. Write KB expansion documents (programs, routing, eligibility, faq)
-5. Chunk 211 resources into county documents
-6. Write deploy.py (following thrive-at-work pattern)
-7. Update orchestration prompt
-8. Test deploy to dev (us-west-2)
-9. Verify all tools + KB retrieval
-10. Deploy to prod (us-east-1)
-```
-
-All done as a single `deploy.py` run — one command deploys everything.
+- [ ] Existing thrive-at-work agent unaffected

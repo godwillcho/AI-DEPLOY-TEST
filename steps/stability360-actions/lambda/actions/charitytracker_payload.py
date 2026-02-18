@@ -16,6 +16,7 @@ import os
 import uuid
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import boto3
 
@@ -40,6 +41,17 @@ ses_client = boto3.client('ses')
 # ---------------------------------------------------------------------------
 
 REQUIRED_FIELDS = ['client_name', 'need_category', 'zip_code', 'county']
+
+
+def _floats_to_decimals(obj):
+    """Recursively convert float values to Decimal for DynamoDB."""
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    if isinstance(obj, dict):
+        return {k: _floats_to_decimals(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_floats_to_decimals(i) for i in obj]
+    return obj
 
 
 def _validate(body):
@@ -213,7 +225,9 @@ def handle_charitytracker(body):
                 'email_sent': sent,
                 'ses_message_id': message_id or '',
                 'payload_summary': payload_summary,
-                'submission_data': json.loads(json.dumps(body, default=str)),
+                'submission_data': _floats_to_decimals(
+                    json.loads(json.dumps(body, default=str))
+                ),
             })
             logger.info('Submission stored: %s', record_id)
         except Exception:

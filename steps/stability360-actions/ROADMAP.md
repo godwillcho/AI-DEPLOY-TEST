@@ -213,6 +213,15 @@ The intake bot presents a ListPicker menu with two service options:
 | Community Resources | `RouteToCommunityResources` | Stability360 Actions AI agent (Aria) |
 | Thrive@Work | `RouteToThriveAtWork` | Thrive@Work AI agent |
 
+### Bot Intents
+
+| Intent | Purpose | Utterances |
+|--------|---------|------------|
+| `IntakeIntent` | Main intent — shows ListPicker menu, captures user selection via `IntakeResponse` slot (FreeFormInput) | hello, hi, help, get started, start, menu, options, services |
+| `RouteToCommunityResources` | Programmatic routing — set by Lambda when user selects "Community Resources" | None (no utterances — Lambda switches to this intent) |
+| `RouteToThriveAtWork` | Programmatic routing — set by Lambda when user selects "Thrive@Work" | None (no utterances — Lambda switches to this intent) |
+| `FallbackIntent` | Catches unrecognized input — Lambda re-shows the ListPicker menu | Built-in (AMAZON.FallbackIntent) |
+
 ### Contact Flow Integration
 
 ```

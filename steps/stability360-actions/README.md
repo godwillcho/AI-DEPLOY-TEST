@@ -193,3 +193,75 @@ python deploy.py --teardown \
 | `--teardown` | Delete all deployed resources |
 | `--delete` | Alias for `--teardown` |
 | `--delete-security-profile` | Also delete the security profile during teardown |
+
+## Testing
+
+### Test resourceLookup (API Gateway)
+
+Call the API directly with curl:
+
+```bash
+curl -X POST https://s4wng4ghnd.execute-api.us-west-2.amazonaws.com/dev/resources/search \
+  -H "Content-Type: application/json" \
+  -d '{"keyword": "food", "county": "Charleston", "zip_code": "29401"}'
+```
+
+Try different keywords:
+
+| Keyword | What it searches |
+|---------|-----------------|
+| `food` | Food pantries, distributions |
+| `rent` | Rental assistance |
+| `utilities` | Utility bill help |
+| `shelter` | Emergency shelters |
+| `dental` | Dental clinics |
+| `transportation` | Bus, ride-sharing |
+| `legal` | Legal aid services |
+| `childcare` | Child care programs |
+| `jobs` | Employment services |
+
+### Test scoringCalculate (API Gateway)
+
+```bash
+curl -X POST https://s4wng4ghnd.execute-api.us-west-2.amazonaws.com/dev/scoring/calculate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "housing_situation": "renting_month_to_month",
+    "monthly_income": 1800,
+    "monthly_housing_cost": 950,
+    "employment_status": "part_time",
+    "has_benefits": false,
+    "monthly_expenses": 1600,
+    "savings_rate": 0,
+    "fico_range": "unknown"
+  }'
+```
+
+Expected response includes: `housing_score`, `employment_score`, `financial_resilience_score`, `composite_score`, `priority_flag`, `recommended_path`.
+
+### Test ZIP Codes (for service area validation)
+
+| ZIP | County | In Service Area? |
+|-----|--------|-----------------|
+| `29401` | Charleston | Yes |
+| `29403` | Charleston | Yes |
+| `29464` | Charleston (Mt. Pleasant) | Yes |
+| `29485` | Dorchester (Summerville) | Yes |
+| `29445` | Berkeley (Goose Creek) | Yes |
+| `29466` | Berkeley (Mt. Pleasant) | Yes |
+| `29910` | Beaufort | No (out of area) |
+| `29201` | Richland (Columbia) | No (out of area) |
+
+### Test via AI Agent (Connect Console)
+
+Open the Amazon Connect console → Q in Connect → Test chat, then try these conversations:
+
+**Quick test — resourceLookup (no consent needed):**
+> "What food banks are in Charleston?"
+- Aria should call resourceLookup directly, no consent or intake questions.
+
+**Quick test — scoringCalculate (full Direct Support flow):**
+> "I need help with my electric bill"
+- Aria confirms need → asks consent → collects full intake (name, ZIP, contact, days, times, age, children, employment, military, assistance) → collects scoring data (housing situation, income, housing cost) → calls scoringCalculate → offers to connect with team member.
+
+**Full test journeys are documented in [test_customer_journeys.md](test_customer_journeys.md)** — 13 journeys covering all paths, consent flows, and edge cases.

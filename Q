@@ -1,0 +1,4 @@
+The resource AgentCoreGateway is in a CREATE_FAILED state
+This AWS::BedrockAgentCore::Gateway resource is in a CREATE_FAILED state.
+
+Resource handler returned message: "Gateway stability360-thrive-at-work-dev-mcp-gw-cimjzu4g1b failed to stabilize, status: FAILED, reason: Failed to create gateway dependencies: UnknownHostException is thrown for endpoint: https://10e2f11-ec6e-44b9-83cb-32dac6722467.my.connect.aws/.well-known/openid-configuration (Service: AgentCredentialProvider, Status Code: 400, Request ID: eb081735-80f7-4fca-aeda-a37b0ec18402) (SDK Attempt Count: 1)" (RequestToken: 5eb131e1-532b-0881-810a-b23f35ceee7d, HandlerErrorCode: NotStabilized)

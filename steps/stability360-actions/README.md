@@ -121,19 +121,75 @@ All attributes are stored as string key-value pairs on the Amazon Connect contac
 
 ## Deployment
 
+### Full Deploy (everything)
+
+Deploys the entire stack end-to-end: CloudFormation (Lambda, API Gateway, IAM roles, log groups), Lambda code, OpenAPI spec, MCP Gateway + Target, AI Agent with orchestration prompt, and Connect wiring.
+
 ```bash
-# Full deploy (dev)
-python deploy.py --stack-name stability360-actions-dev --region us-west-2 \
-  --environment dev --enable-mcp \
+python deploy.py \
+  --stack-name stability360-actions-dev \
+  --region us-west-2 \
+  --environment dev \
+  --enable-mcp \
   --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d
-
-# Update Lambda code only
-python deploy.py --update-code-only --stack-name stability360-actions-dev --region us-west-2
-
-# Update orchestration prompt only
-python deploy.py --update-prompt --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d \
-  --stack-name stability360-actions-dev --region us-west-2
-
-# Teardown
-python deploy.py --teardown --stack-name stability360-actions-dev --region us-west-2
 ```
+
+**What it deploys:**
+
+| Step | What | Description |
+|------|------|-------------|
+| 1 | CloudFormation Stack | Lambda function, API Gateway, IAM roles, CloudWatch log groups |
+| 2 | Lambda Code | Zips and uploads `scoring_calculator.py` + `sophia_resource_lookup.py` |
+| 3 | OpenAPI Spec | Uploads `actions-spec.yaml` to API Gateway for MCP tool definitions |
+| 4 | MCP Gateway + Target | Creates AgentCore MCP gateway pointing at the API Gateway |
+| 5 | AI Agent | Creates/updates the Q Connect agent with orchestration prompt |
+| 6 | Connect Wiring | Attaches the agent to the Amazon Connect assistant as SelfService orchestrator |
+
+### Partial Deploys (for faster iteration)
+
+```bash
+# Update Lambda code only (skips CFN, MCP, prompt, Connect wiring)
+python deploy.py --update-code-only \
+  --stack-name stability360-actions-dev \
+  --region us-west-2
+
+# Update orchestration prompt only (skips everything else)
+python deploy.py --update-prompt \
+  --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d \
+  --stack-name stability360-actions-dev \
+  --region us-west-2
+
+# Update Connect wiring only (re-attach agent to assistant)
+python deploy.py --connect-only \
+  --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d \
+  --stack-name stability360-actions-dev \
+  --region us-west-2
+```
+
+### Teardown
+
+Deletes the CloudFormation stack, MCP gateway, AI agent, and Connect wiring.
+
+```bash
+python deploy.py --teardown \
+  --stack-name stability360-actions-dev \
+  --region us-west-2
+```
+
+### CLI Flags Reference
+
+| Flag | Description |
+|------|-------------|
+| `--stack-name` | CloudFormation stack name (default: `stability360-actions-dev`) |
+| `--region` | AWS region (default: `us-west-2`) |
+| `--environment` | Environment tag: `dev` or `prod` |
+| `--enable-mcp` | Enable MCP Gateway creation (required for full deploy) |
+| `--connect-instance-id` | Amazon Connect instance ID (required for agent + prompt) |
+| `--update-code-only` | Only update Lambda function code |
+| `--update-prompt` | Only update the orchestration prompt |
+| `--connect-only` | Only re-wire the agent to Connect |
+| `--openapi-spec-url` | Override OpenAPI spec URL (auto-detected by default) |
+| `--model-id` | Override the AI model for orchestration |
+| `--teardown` | Delete all deployed resources |
+| `--delete` | Alias for `--teardown` |
+| `--delete-security-profile` | Also delete the security profile during teardown |

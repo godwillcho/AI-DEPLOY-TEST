@@ -1,0 +1,169 @@
+
+# Stability360 CX Design - Change Document
+
+**CX Design Document**  
+**Change Document & Clarifications**  
+**Trident United Way - Stability360 POC**  
+**February 2026**
+
+## Overview
+This document summarizes all changes, clarifications, and additions to the Stability 360 CX Design Document v2 based on TUW feedback. Each item includes the section reference, original content, feedback received, and updated content.
+
+---
+
+## 1. Section 4.1 - Thrive@Work Eligibility
+
+Eligibility is determined when client answers the question about their employment question
+ 
+Must be employed at a participating Thrive@Work business. Eligibility is determined when the client answers the employment question during intake (eligibility extends beyond TUW's geographic service area).
+
+---
+
+## 2. Section 4.1 - Thrive@Work Behavior
+
+Triggers that client is eligible for Thrive@Work program
+
+When employment at a participating business is confirmed, the system flags the client as eligible for the Thrive@Work program and routes them into direct support workflows; light-touch referrals provided when appropriate.
+
+---
+
+## 3. Section 5.2 - Stage 3 Need Assessment
+
+
+The need categories vary on support type based off the subcategory selected. Disaster would not trigger utility assistance. It should be the subcategory "Utilities" under "Housing". Also Thrive@Work is not triggered by Employment/Education. It is triggered by the question about employment in the intake form.
+ 
+AI Agent asks: "How can I help you today?" and identifies need category. Each category leads to subcategories that further refine the support path:
+
+| Category | Subcategories | Default Path (POC) |
+|---|---|---|
+| Housing | Includes "Utilities" subcategory | Referral (Light Touch); "Utilities" subcategory triggers Direct Support |
+| Transportation | Various transportation needs | Referral (Light Touch) |
+| Food | Food assistance resources | Referral (Light Touch) |
+| Health | Healthcare resources | Referral (Light Touch) |
+| Child Care | Childcare resources | Referral (Light Touch) |
+| Disaster | Emergency/disaster resources | Referral (Light Touch) |
+| Employment and Education | Job/training resources | Referral (Light Touch) |
+| Legal Aid | Legal assistance resources | Referral (Light Touch) |
+| Financial Literacy | Financial education resources | Referral (Light Touch) |
+| Hygiene | Hygiene/personal care resources | Referral (Light Touch) |
+| Other | Free text intake | Determined by AI |
+
+**Important Notes:**
+- Thrive@Work eligibility is NOT triggered by category selection. It is determined earlier in the intake flow when the client answers the employment question (Stage 2).
+- Utility Assistance (Direct Support) is triggered by selecting the "Utilities" subcategory under Housing, not by selecting "Disaster" or any top-level category.
+- For Phase 0 POC, all other category/subcategory combinations default to the Referral (Light Touch) path. Future phases will implement additional subcategory-level routing logic for Direct Support triggers.
+
+---
+
+## 4. Section 5.2.1 - Multiple Category Selection
+
+Name the "hybrid path" as a pattern. We already describe it well (self-service referrals + human escalation in parallel). Let's formally name it: Hybrid Support Path (Light + High Touch).
+ 
+When a client selects multiple categories (e.g., both referral and direct support needs), the system engages the Hybrid Support Path (Light + High Touch). In this pattern, the AI delivers self-directed referrals immediately while simultaneously initiating the direct support path—providing clients with resources they can navigate on their own while also connecting them to a Family Coach for complex needs.
+
+---
+
+## 5. Section 6.4 - Escalation Trigger Summary
+
+**6.5 Escalation Trigger Summary** - The following table summarizes the conditions that trigger escalation from the Agentic AI :
+
+| Trigger Type | Examples |
+|---|---|
+| Urgency | Imminent utility shutoff, emergency housing situation |
+| Complexity | Multiple overlapping needs, Hybrid Support Path engagement |
+| Eligibility Uncertainty | Mixed signals during screening, conflicting intake responses |
+| Client Preference | Client explicitly requests to speak with a person |
+| System Constraint | No agent available (triggers scheduling or callback offer) |
+
+---
+
+## 6. Section 6.3 - Hours of Operation
+ 
+**Business Hours for Human Escalation:**
+- Monday - Friday: 8:30 AM - 8:30 PM EST
+- Saturday: 9:00 AM - 12:00 PM EST
+
+## 7. Section 7.3 - Agent Status Codes
+
+
+## 8. Section 8.3 - Knowledge Base Document Classes
+
+
+## 9. Section 11 - Client Identification and Recognition
+
+IMPLEMENT 
+Add language clarifying what happens when identity confidence is low (e.g., partial match, conflicting data). Something like: "When confidence is low, the system defaults to respectful confirmation rather than assumption."
+
+**Updated:**  
+The system needs to recognize returning clients from previous interactions. Given that name alone is insufficient (duplicates are common) and phone/email carry duplication risks, the following approach will be used:
+- Amazon Connect Customer Profiles: Store client information linked to contact identifiers
+- Multiple identifier matching: Combine name + contact method for higher confidence matching
+- Confirmation prompts: Ask returning clients to confirm identity when matches are found
+
+When identity confidence is low (e.g., partial match, conflicting data, or incomplete information), the system defaults to respectful confirmation rather than assumption—prompting the client to verify their identity before proceeding with any personalized context from previous interactions.
+
+---
+
+## 10. Section 14 - Privacy and Data Considerations
+
+**Feedback:**  
+Recommend adding: Stability360 uses client information solely to improve coordination, follow-up, and outcomes. Data is not used for surveillance, eligibility enforcement, or punitive decision-making. Information collected is limited to what is necessary to support connection to services and improve system effectiveness.
+  
+Stability 360 is designed to be respectful, confidential, and easy to use:
+- Only information needed to help connect clients to support is collected
+- Information is not shared without purpose
+- Conversations are used to help improve follow-up and outcomes
+- Thrive@Work users: employer does not receive details about individual requests
+
+Stability 360 uses client information solely to improve coordination, follow-up, and outcomes. Data is not used for surveillance, eligibility enforcement, or punitive decision-making. Information collected is limited to what is necessary to support connection to services and improve system effectiveness.
+
+---
+
+## 11. Section 16 - Acceptance Criteria (Eligibility Screening)
+
+**Feedback:**  
+Income calculator + intake form questions (employment, military, children, age) determines program eligibility
+
+**Updated:**  
+Eligibility Screening: Income calculator combined with intake form questions (employment status, military service, children under 18, age) correctly determines program eligibility for direct support pathways.
+
+---
+
+## 12. Section 16 - Acceptance Criteria (Client Experience)
+
+**Feedback:**  
+Add: Client reports experience as clear, respectful, and not repetitive
+
+**Updated:**  
+Client Experience: Clear, dignified interaction that respects client time. Client reports experience as clear, respectful, and not repetitive.
+
+---
+
+## 13. Section 3 - Flow Diagram Clarification
+**Feedback/Question:**  
+Would like some clarification on the informational/self directed pathway - is this if a client explicitly states that they would like to access resources on 211 and not contact a direct support provider?
+
+**Clarification:**  
+Yes. The "Informational/Self-Directed" pathway on the flow diagram is triggered when a client explicitly states they would like to access resources on 211 and not contact a direct support provider. This routes them to the Light Touch referral path where they receive resource information to pursue independently.
+
+---
+
+
+## Summary of Changes
+
+| # | Section | Change Type |
+|---:|---|---|
+| 1 | 4.1 Thrive@Work Eligibility | Updated |
+| 2 | 4.1 Thrive@Work Behavior | Updated |
+| 3 | 5.2 Stage 3 Need Assessment | Corrected (Major) |
+| 4 | 5.2.1 Multiple Category Selection | Updated (Named Pattern) |
+| 5 | 6.4 Escalation Trigger Summary | New table |
+| 6 | 6.3 Hours of Operation | Updated |
+| 7 | 7.3 Agent Status Codes | Clarification |
+| 8 | 8.3 Knowledge Base Document Classes | Clarification |
+| 9 | 11 Client Identification | Updated |
+| 10 | 14 Privacy and Data Considerations | Updated |
+| 11 | 16 Acceptance Criteria (Eligibility) | Updated |
+| 12 | 16 Acceptance Criteria (Client Experience) | Updated |
+| 13 | 3 Flow Diagram | Clarification |
+| 14 | 13 Kiosk Hardware Specifications | Reccomendation |

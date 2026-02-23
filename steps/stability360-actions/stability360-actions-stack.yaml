@@ -1,7 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Stability360 Actions Stack — 6 MCP Action Tools (Scoring Calculator,
-  CharityTracker Submit, Follow-up Scheduler, Customer Profile, Case Status,
+  Stability360 Actions Stack — 2 MCP Action Tools (Scoring Calculator,
   Resource Lookup).  Single Lambda function with modular routing,
   API Gateway with inline OpenAPI Body, DynamoDB for records,
   and AgentCore MCP Gateway.
@@ -47,15 +46,6 @@ Parameters:
     Description: 'URL to fetch the MCP-facing OpenAPI specification from (YAML format)'
     Default: ''
 
-  SesSenderEmail:
-    Type: String
-    Description: 'SES verified sender email for CharityTracker notifications'
-    Default: 'godwill.achu.cho@gmail.com'
-
-  CharityTrackerRecipientEmail:
-    Type: String
-    Description: 'Email address to receive CharityTracker submissions'
-    Default: 'godwill.achu.cho@gmail.com'
 
 Conditions:
   CreateMcpGateway: !Equals [!Ref EnableMcpGateway, 'true']
@@ -101,59 +91,6 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-actions'
       RetentionInDays: 7
-    DeletionPolicy: Delete
-
-  IntakeBotLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-intake-bot'
-      RetentionInDays: 7
-    DeletionPolicy: Delete
-
-  IntakeBotRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CloudWatchLogsAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub '${IntakeBotLogGroup.Arn}:*'
-    DeletionPolicy: Delete
-
-  IntakeBotFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub '${AWS::StackName}-intake-bot'
-      Runtime: python3.13
-      Handler: lambda_function.handler
-      Role: !GetAtt IntakeBotRole.Arn
-      Timeout: 10
-      MemorySize: 128
-      LoggingConfig:
-        LogGroup: !Ref IntakeBotLogGroup
-      Code:
-        ZipFile: |
-          import json
-          def handler(event, context):
-              return {
-                  'sessionState': {
-                      'dialogAction': {'type': 'Close'},
-                      'intent': {'name': 'IntakeIntent', 'state': 'Fulfilled'}
-                  }
-              }
     DeletionPolicy: Delete
 
   # =======================================================
@@ -319,51 +256,6 @@ Resources:
                 Resource:
                   - !GetAtt ActionsTable.Arn
                   - !Sub '${ActionsTable.Arn}/index/*'
-        - PolicyName: SESAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ses:SendEmail
-                  - ses:SendRawEmail
-                Resource: '*'
-        - PolicyName: ConnectTasksAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - connect:StartTaskContact
-                Resource: '*'
-        - PolicyName: ConnectCasesAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - cases:CreateCase
-                  - cases:GetCase
-                  - cases:SearchCases
-                  - cases:GetDomain
-                  - cases:ListDomains
-                  - cases:ListTemplates
-                  - cases:ListFields
-                  - cases:BatchGetField
-                  - cases:CreateRelatedItem
-                  - connect:ListIntegrationAssociations
-                Resource: '*'
-        - PolicyName: CustomerProfilesAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - profile:SearchProfiles
-                  - profile:CreateProfile
-                  - profile:GetProfile
-                  - profile:ListDomains
-                Resource: '*'
         - PolicyName: XRayAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -376,7 +268,7 @@ Resources:
     DeletionPolicy: Delete
 
   # =======================================================
-  # Lambda — Actions Handler (single function, 6 routes)
+  # Lambda — Actions Handler (single function, 2 routes)
   # =======================================================
 
   ActionsFunction:
@@ -398,9 +290,6 @@ Resources:
           ACTIONS_TABLE_NAME: !Ref ActionsTable
           ENVIRONMENT: !Ref Environment
           LOG_LEVEL: INFO
-          CONNECT_INSTANCE_ID: !Ref ConnectInstanceId
-          SES_SENDER_EMAIL: !Ref SesSenderEmail
-          CHARITYTRACKER_RECIPIENT_EMAIL: !Ref CharityTrackerRecipientEmail
           SOPHIA_API_URL: 'https://api-prod-0.sophia-app.com/api/services/search/keyword-search'
           SOPHIA_TENANT: 'sc-prod-0'
           SOPHIA_ORIGIN: 'https://www.sc211.org'
@@ -427,7 +316,7 @@ Resources:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub '${AWS::StackName}-actions-api'
-      Description: 'Stability360 Actions API — 6 MCP Tools'
+      Description: 'Stability360 Actions API — 2 MCP Tools'
       Body:
         openapi: '3.0.1'
         info:
@@ -476,173 +365,6 @@ Resources:
               responses:
                 '200':
                   description: 'Scoring results'
-                '400':
-                  description: 'Invalid request'
-                '500':
-                  description: 'Server error'
-              x-amazon-apigateway-integration:
-                type: 'aws_proxy'
-                httpMethod: 'POST'
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActionsFunction.Arn}/invocations'
-          /charitytracker/submit:
-            post:
-              operationId: 'charityTrackerSubmit'
-              summary: 'Submit intake data to CharityTracker'
-              security:
-                - api_key: []
-              requestBody:
-                required: true
-                content:
-                  application/json:
-                    schema:
-                      type: 'object'
-                      required:
-                        - client_name
-                        - need_category
-                        - zip_code
-                        - county
-                      properties:
-                        client_name:
-                          type: 'string'
-                        need_category:
-                          type: 'string'
-                        subcategories:
-                          type: 'array'
-                          items:
-                            type: 'string'
-                        zip_code:
-                          type: 'string'
-                        county:
-                          type: 'string'
-                        contact_method:
-                          type: 'string'
-                        contact_info:
-                          type: 'string'
-                        intake_answers:
-                          type: 'object'
-                        extended_intake:
-                          type: 'object'
-                        conversation_summary:
-                          type: 'string'
-                        escalation_tier:
-                          type: 'string'
-                        profile_id:
-                          type: 'string'
-                        timestamp:
-                          type: 'string'
-              responses:
-                '200':
-                  description: 'Submission result'
-                '400':
-                  description: 'Invalid request'
-                '500':
-                  description: 'Server error'
-              x-amazon-apigateway-integration:
-                type: 'aws_proxy'
-                httpMethod: 'POST'
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActionsFunction.Arn}/invocations'
-          /followup/schedule:
-            post:
-              operationId: 'followupSchedule'
-              summary: 'Schedule a client follow-up'
-              security:
-                - api_key: []
-              requestBody:
-                required: true
-                content:
-                  application/json:
-                    schema:
-                      type: 'object'
-                      required:
-                        - contact_info
-                        - contact_method
-                        - referral_type
-                        - need_category
-                      properties:
-                        contact_info:
-                          type: 'string'
-                        contact_method:
-                          type: 'string'
-                        referral_type:
-                          type: 'string'
-                        need_category:
-                          type: 'string'
-                        follow_up_message:
-                          type: 'string'
-                        scheduled_days_out:
-                          type: 'integer'
-                        case_id:
-                          type: 'string'
-                        case_reference:
-                          type: 'string'
-                        profile_id:
-                          type: 'string'
-              responses:
-                '200':
-                  description: 'Scheduling result'
-                '400':
-                  description: 'Invalid request'
-                '500':
-                  description: 'Server error'
-              x-amazon-apigateway-integration:
-                type: 'aws_proxy'
-                httpMethod: 'POST'
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActionsFunction.Arn}/invocations'
-          /customer/profile:
-            post:
-              operationId: 'customerProfileLookup'
-              summary: 'Look up or create a customer profile'
-              security:
-                - api_key: []
-              requestBody:
-                required: true
-                content:
-                  application/json:
-                    schema:
-                      type: 'object'
-                      required:
-                        - first_name
-                        - last_name
-                      properties:
-                        first_name:
-                          type: 'string'
-                        last_name:
-                          type: 'string'
-                        email:
-                          type: 'string'
-                        phone_number:
-                          type: 'string'
-              responses:
-                '200':
-                  description: 'Profile lookup result'
-                '400':
-                  description: 'Invalid request'
-                '500':
-                  description: 'Server error'
-              x-amazon-apigateway-integration:
-                type: 'aws_proxy'
-                httpMethod: 'POST'
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActionsFunction.Arn}/invocations'
-          /case/status:
-            post:
-              operationId: 'caseStatusLookup'
-              summary: 'Look up a case status by reference number'
-              security:
-                - api_key: []
-              requestBody:
-                required: true
-                content:
-                  application/json:
-                    schema:
-                      type: 'object'
-                      required:
-                        - case_reference
-                      properties:
-                        case_reference:
-                          type: 'string'
-              responses:
-                '200':
-                  description: 'Case status result'
                 '400':
                   description: 'Invalid request'
                 '500':
@@ -713,7 +435,7 @@ Resources:
     Type: AWS::ApiGateway::ApiKey
     Properties:
       Name: !Sub '${AWS::StackName}-api-key'
-      Description: 'API Key for Stability360 Actions (6 MCP Tools)'
+      Description: 'API Key for Stability360 Actions (2 MCP Tools)'
       Enabled: true
       GenerateDistinctId: true
 
@@ -1089,18 +811,14 @@ Resources:
     Condition: CreateMcpGateway
     Properties:
       Name: !Sub '${AWS::StackName}-mcp-gw'
-      Description: 'Stability360 Actions MCP Gateway — 6 action tools'
+      Description: 'Stability360 Actions MCP Gateway — 2 action tools'
       ProtocolType: MCP
       ProtocolConfiguration:
         Mcp:
           Instructions: >
             Use this gateway to access Stability360 action tools:
-            scoringCalculate for Self-Sufficiency Matrix scoring,
-            charityTrackerSubmit for sending intake data to case management,
-            followupSchedule for scheduling client follow-ups,
-            customerProfileLookup for finding or creating customer profiles,
-            caseStatusLookup for checking case status,
-            and resourceLookup for searching community resources.
+            scoringCalculate for Self-Sufficiency Matrix scoring and
+            resourceLookup for searching community resources via SC 211.
           SupportedVersions:
             - '2025-03-26'
       AuthorizerType: !If [IntegrateWithConnect, CUSTOM_JWT, AWS_IAM]
@@ -1130,22 +848,6 @@ Outputs:
     Description: 'POST endpoint for scoring calculator'
     Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/scoring/calculate'
 
-  CharityTrackerEndpoint:
-    Description: 'POST endpoint for CharityTracker submission'
-    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/charitytracker/submit'
-
-  FollowupEndpoint:
-    Description: 'POST endpoint for follow-up scheduler'
-    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/followup/schedule'
-
-  CustomerProfileEndpoint:
-    Description: 'POST endpoint for customer profile lookup'
-    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/customer/profile'
-
-  CaseStatusEndpoint:
-    Description: 'POST endpoint for case status lookup'
-    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/case/status'
-
   ResourcesSearchEndpoint:
     Description: 'POST endpoint for community resource search'
     Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/resources/search'
@@ -1153,14 +855,6 @@ Outputs:
   ActionsTableName:
     Description: 'DynamoDB table for action records'
     Value: !Ref ActionsTable
-
-  IntakeBotFunctionName:
-    Description: 'Name of the Intake Bot Lambda function'
-    Value: !Ref IntakeBotFunction
-
-  IntakeBotFunctionArn:
-    Description: 'ARN of the Intake Bot Lambda function'
-    Value: !GetAtt IntakeBotFunction.Arn
 
   ActionsFunctionName:
     Description: 'Lambda function name'

@@ -77,6 +77,18 @@ def _build_search_payload(keyword, county='', city='', zip_code='', state='South
 # ---------------------------------------------------------------------------
 
 
+def _to_e164(raw_number):
+    """Convert a raw phone number to E.164 format with dashes (+1-XXX-XXX-XXXX for US)."""
+    digits = re.sub(r'\D', '', str(raw_number))
+    if len(digits) == 10:
+        return f'+1-{digits[:3]}-{digits[3:6]}-{digits[6:]}'
+    if len(digits) == 11 and digits.startswith('1'):
+        return f'+{digits[0]}-{digits[1:4]}-{digits[4:7]}-{digits[7:]}'
+    if digits.startswith('+'):
+        return digits
+    return f'+{digits}' if digits else ''
+
+
 def _strip_html(text):
     """Remove HTML tags and decode entities."""
     if not text:
@@ -96,7 +108,7 @@ def _parse_results(raw_results, max_results=None):
         location = item.get('location', {}) or {}
         organization = service.get('organization', {}) or {}
         address = location.get('address', {}) or {}
-        phones = item.get('phones', []) or []
+        phones = service.get('phones', []) or item.get('phones', []) or []
 
         # Build address string
         addr_parts = [
@@ -107,16 +119,19 @@ def _parse_results(raw_results, max_results=None):
         ]
         addr_str = ', '.join(p for p in addr_parts if p).strip(', ')
 
-        # Extract phone numbers
+        # Extract phone numbers in E.164 format
         phone_list = []
         for p in phones:
             if isinstance(p, dict):
-                number = p.get('number', '')
-                name = p.get('name', '')
-                if number:
-                    phone_list.append(f'{number} ({name})' if name else number)
+                raw = p.get('number', '') or p.get('plainNumber', '')
+                label = p.get('phoneLabel', '') or p.get('name', '')
+                e164 = _to_e164(raw)
+                if e164:
+                    phone_list.append(f'{e164} ({label})' if label else e164)
             elif isinstance(p, str) and p:
-                phone_list.append(p)
+                e164 = _to_e164(p)
+                if e164:
+                    phone_list.append(e164)
 
         # Clean description
         description = _strip_html(service.get('description', ''))

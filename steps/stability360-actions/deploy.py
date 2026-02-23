@@ -2,26 +2,25 @@
 """
 Stability360 — Actions Stack Deployment Script
 
-Deploys the CloudFormation stack (DynamoDB, Lambda, API Gateway, MCP Gateway),
-configures 4 MCP action tools, creates a NEW AI agent (not default), and seeds
-KB expansion documents to the existing thrive-at-work KB bucket.
+Deploys the CloudFormation stack (DynamoDB, Lambda, API Gateway, MCP Gateway)
+and configures 2 MCP action tools (scoringCalculate + resourceLookup) with a
+NEW AI agent (not default).
 
 Deployment steps:
-  No MCP:  1-4  (CFN, outputs, Lambda, KB seed)
+  No MCP:  1-3  (CFN, outputs, Lambda)
   MCP:     1-7  (+ OpenAPI upload, API key credential, REST API target)
   Connect: 1-13 (+ audience, registration, security profile, prompt,
-                  AI agent with 3 tools, tool config reference)
+                  AI agent with 2 MCP tools, tool config reference)
 
 Usage:
     python deploy.py --stack-name stability360-actions --region us-east-1 \\
       --environment prod --enable-mcp \\
-      --connect-instance-id <ID> \\
-      --thrive-stack-name stability360-thrive-at-work-prod
+      --connect-instance-id <ID>
 
-    python deploy.py --seed-only --thrive-stack-name <THRIVE_STACK>
     python deploy.py --update-code-only --stack-name <STACK>
     python deploy.py --update-prompt --connect-instance-id <ID>
     python deploy.py --delete --stack-name <STACK>
+    python deploy.py --teardown --stack-name <STACK> --connect-instance-id <ID>
 """
 
 import argparse
@@ -54,8 +53,6 @@ logging.getLogger('urllib3').setLevel(logging.WARNING)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_FILE = os.path.join(SCRIPT_DIR, 'stability360-actions-stack.yaml')
 LAMBDA_CODE_DIR = os.path.join(SCRIPT_DIR, 'lambda', 'actions')
-INTAKE_LAMBDA_CODE_DIR = os.path.join(SCRIPT_DIR, 'lambda', 'intake_bot')
-KB_DOCUMENTS_DIR = os.path.join(SCRIPT_DIR, 'seed-data', 'kb-documents')
 OPENAPI_SPEC_TEMPLATE = os.path.join(SCRIPT_DIR, 'openapi', 'actions-spec.yaml')
 ORCHESTRATION_PROMPT_FILE = os.path.join(SCRIPT_DIR, 'prompts', 'orchestration-prompt.txt')
 
@@ -67,38 +64,21 @@ POLL_INTERVAL = 10
 
 OPENAPI_S3_KEY = 'openapi/actions-spec.yaml'
 
-# Lex V2 Bot constants (intake bot)
-LEX_BOT_LOCALE = 'en_US'
-LEX_BOT_NLU_THRESHOLD = 0.40
-LEX_BOT_IDLE_SESSION_TTL = 300  # 5 minutes
-INTAKE_BOT_ALIAS_NAME = 'live'
-LEX_BOT_BUILD_POLL_INTERVAL = 5   # seconds between build status checks
-LEX_BOT_BUILD_TIMEOUT = 120       # max seconds to wait for build
-
-# 6 MCP tool operation IDs (from OpenAPI spec)
-MCP_TOOL_OPERATIONS = ['scoringCalculate', 'charityTrackerSubmit', 'followupSchedule', 'customerProfileLookup', 'caseStatusLookup', 'resourceLookup']
+# 2 MCP tool operation IDs (from OpenAPI spec) — Phase 0: scoring + resource lookup only
+MCP_TOOL_OPERATIONS = ['scoringCalculate', 'resourceLookup']
 
 ORCHESTRATION_PROMPT_MODEL = 'us.anthropic.claude-sonnet-4-5-20250929-v1:0'
 
 MCP_TOOL_CONFIG_FILE = os.path.join(SCRIPT_DIR, 'ai-agent-tool-config.json')
 
-# KB document folder mapping — documents seeded to the THRIVE KB bucket
-KB_DOCUMENT_FOLDER_MAP = {
-    'programs': 'stability360/programs/',
-    'routing': 'stability360/routing/',
-    'eligibility': 'stability360/eligibility/',
-    'faq': 'stability360/faq/',
-    '211-resources': 'stability360/211-resources/',
-}
-
 # Retrieve tool instruction for this agent
 RETRIEVE_TOOL_INSTRUCTION = (
     'Use this tool to search the Stability360 knowledge base whenever a '
     'customer asks about programs, services, eligibility criteria, community '
-    'resources, 211 providers, or anything related to Stability360 and '
-    'Trident United Way. Include the client\'s county when searching for '
-    'community resources. Always try Retrieve before telling a customer '
-    'you don\'t have information.'
+    'resources, 211 providers, Thrive@Work employer-based programs, or '
+    'anything related to Stability360 and Trident United Way. Include the '
+    'client\'s county when searching for community resources. Always try '
+    'Retrieve before telling a customer you don\'t have information.'
 )
 
 RETRIEVE_TOOL_EXAMPLES = [
@@ -136,40 +116,6 @@ SCORING_TOOL_INSTRUCTION = (
     '(direct_support, mixed, or referral).'
 )
 
-CHARITYTRACKER_TOOL_INSTRUCTION = (
-    'Use this tool when a Direct Support intake is complete and all required '
-    'fields have been collected. Assembles the full session data into a '
-    'structured payload and sends it to the case management team via email. '
-    'ALWAYS confirm with the client before submitting. Required inputs: '
-    'client_name, need_category, zip_code, county.'
-)
-
-FOLLOWUP_TOOL_INSTRUCTION = (
-    'Use this tool after delivering a referral to schedule an automated '
-    'follow-up, or after submitting a Direct Support payload to create a '
-    'task for the case manager queue. Required inputs: contact_info, '
-    'contact_method, referral_type, need_category. Optional: case_id '
-    '(from charityTrackerSubmit), profile_id (from customerProfileLookup).'
-)
-
-CUSTOMER_PROFILE_TOOL_INSTRUCTION = (
-    'Use this tool after the client consents to data collection and provides '
-    'their basic information (first name, last name, and at least one of '
-    'email or phone number). Searches for an existing customer profile. '
-    'If found, the client is a returning customer. If not found, creates a '
-    'new profile. Required inputs: first_name, last_name. At least one of: '
-    'email, phone_number. The profile_id is returned as a session attribute '
-    'and must be passed to charityTrackerSubmit and followupSchedule.'
-)
-
-CASE_STATUS_TOOL_INSTRUCTION = (
-    'Use this tool when a client wants to check the status of their case. '
-    'The client provides their case reference number (a numeric ID from Amazon Connect Cases). '
-    'No consent or personal information is required — just the reference. '
-    'Required input: case_reference. Returns case status, description, and '
-    'a message to deliver to the client.'
-)
-
 RESOURCE_LOOKUP_TOOL_INSTRUCTION = (
     'Use this tool to search the SC 211 community resource directory for '
     'services matching a keyword and location. Use this when a client needs '
@@ -188,13 +134,10 @@ API_KEY_CREDENTIAL_NAME = None
 MCP_TARGET_NAME = None
 AI_AGENT_NAME = None
 AI_AGENT_DESCRIPTION = None
-MCP_TOOL_NAMES = None          # list of 3 tool names
-MCP_TOOL_NAMES_SAFE = None     # list of 3 tool names (hyphens replaced)
+MCP_TOOL_NAMES = None          # list of 2 tool names
+MCP_TOOL_NAMES_SAFE = None     # list of 2 tool names (hyphens replaced)
 ORCHESTRATION_PROMPT_NAME = None
 SECURITY_PROFILE_NAME = None
-INTAKE_BOT_NAME = None
-INTAKE_BOT_DESCRIPTION = None
-LEX_BOT_ROLE_NAME = None
 
 
 def init_resource_names(stack_name):
@@ -203,15 +146,14 @@ def init_resource_names(stack_name):
     global AI_AGENT_NAME, AI_AGENT_DESCRIPTION
     global MCP_TOOL_NAMES, MCP_TOOL_NAMES_SAFE
     global ORCHESTRATION_PROMPT_NAME, SECURITY_PROFILE_NAME
-    global INTAKE_BOT_NAME, INTAKE_BOT_DESCRIPTION, LEX_BOT_ROLE_NAME
 
     API_KEY_CREDENTIAL_NAME = f'{stack_name}-api-key'
     MCP_TARGET_NAME = f'{stack_name}-api'
 
     AI_AGENT_NAME = f'{stack_name}-orchestration'
     AI_AGENT_DESCRIPTION = (
-        f'AI agent for {stack_name} — Scoring Calculator, '
-        'CharityTracker Payload, Follow-up Scheduler, Customer Profile, Case Status, Resource Lookup'
+        f'AI agent for {stack_name} — Scoring Calculator + Resource Lookup '
+        '(Phase 0: 2 MCP tools)'
     )
 
     # Tool name format: {target-name}___{operationId}
@@ -220,13 +162,6 @@ def init_resource_names(stack_name):
 
     ORCHESTRATION_PROMPT_NAME = f'{stack_name}-orchestration'
     SECURITY_PROFILE_NAME = f'{stack_name}-AI-Agent'
-
-    INTAKE_BOT_NAME = f'{stack_name}-intake-bot'
-    INTAKE_BOT_DESCRIPTION = (
-        f'Intake router for {stack_name} — presents service menu and '
-        'routes customers to the appropriate AI agent'
-    )
-    LEX_BOT_ROLE_NAME = f'{stack_name}-lex-role'
 
 
 # ---------------------------------------------------------------------------
@@ -251,8 +186,7 @@ def get_stack_status(cf_client, stack_name):
 def deploy_stack(cf_client, stack_name, template_body, environment,
                  enable_mcp=False, enable_connect=False,
                  connect_instance_id='', connect_instance_url='',
-                 openapi_spec_url='',
-                 ses_sender='', charitytracker_recipient=''):
+                 openapi_spec_url=''):
     params = [
         {'ParameterKey': 'Environment', 'ParameterValue': environment},
         {'ParameterKey': 'EnableMcpGateway', 'ParameterValue': 'true' if enable_mcp else 'false'},
@@ -260,8 +194,6 @@ def deploy_stack(cf_client, stack_name, template_body, environment,
         {'ParameterKey': 'ConnectInstanceId', 'ParameterValue': connect_instance_id},
         {'ParameterKey': 'ConnectInstanceUrl', 'ParameterValue': connect_instance_url},
         {'ParameterKey': 'OpenApiSpecUrl', 'ParameterValue': openapi_spec_url},
-        {'ParameterKey': 'SesSenderEmail', 'ParameterValue': ses_sender or 'noreply@stability360.org'},
-        {'ParameterKey': 'CharityTrackerRecipientEmail', 'ParameterValue': charitytracker_recipient or 'charitytracker-test@stability360.org'},
     ]
     kwargs = {
         'StackName': stack_name,
@@ -326,6 +258,201 @@ def delete_stack(cf_client, stack_name):
     logger.info('Stack deleted.')
 
 
+def teardown_all(session, stack_name, connect_instance_id, region,
+                  delete_security_profile=False):
+    """Full teardown: delete all resources created by deploy.py.
+
+    Order matters — resources have dependencies:
+      1. Delete AI Agent + AI Prompt (Q Connect)
+      2. Clear security profile MCP apps
+      3. Delete Connect ↔ MCP integration association
+      4. Delete App Integrations application
+      5. Delete MCP gateway target
+      6. Delete MCP gateway
+      7. Delete API key credential
+      8. Delete CloudFormation stack
+
+    Security profile deletion is skipped by default (AWS sticky reference).
+    Pass delete_security_profile=True to attempt it (use --delete-security-profile).
+    The function logs warnings and continues on individual failures.
+    """
+    cf_client = session.client('cloudformation')
+
+    # --- Read stack outputs (needed for gateway ID, etc.) ---
+    outputs = {}
+    try:
+        outputs = get_stack_outputs(cf_client, stack_name)
+    except Exception:
+        logger.warning('Could not read stack outputs — some resources may need manual cleanup.')
+
+    gateway_id = outputs.get('McpGatewayId', '')
+
+    # --- 1. Delete AI Agent + Prompt ---
+    if connect_instance_id:
+        try:
+            assistant_id, _ = find_qconnect_assistant(session, connect_instance_id)
+            if assistant_id:
+                qconnect_client = session.client('qconnect')
+
+                # Delete AI Agent
+                agent_id, _ = find_existing_ai_agent(qconnect_client, assistant_id, AI_AGENT_NAME)
+                if agent_id:
+                    logger.info('Deleting AI Agent: %s (%s)', AI_AGENT_NAME, agent_id)
+                    try:
+                        qconnect_client.delete_ai_agent(
+                            assistantId=assistant_id, aiAgentId=agent_id,
+                        )
+                        logger.info('AI Agent deleted.')
+                    except Exception as e:
+                        logger.warning('Could not delete AI Agent: %s', e)
+                else:
+                    logger.info('AI Agent not found — nothing to delete.')
+
+                # Delete AI Prompt
+                prompt_id, _ = find_existing_prompt(qconnect_client, assistant_id, ORCHESTRATION_PROMPT_NAME)
+                if prompt_id:
+                    logger.info('Deleting AI Prompt: %s (%s)', ORCHESTRATION_PROMPT_NAME, prompt_id)
+                    try:
+                        qconnect_client.delete_ai_prompt(
+                            assistantId=assistant_id, aiPromptId=prompt_id,
+                        )
+                        logger.info('AI Prompt deleted.')
+                    except Exception as e:
+                        logger.warning('Could not delete AI Prompt: %s', e)
+                else:
+                    logger.info('AI Prompt not found — nothing to delete.')
+        except Exception as e:
+            logger.warning('Could not clean up Q Connect resources: %s', e)
+
+    # --- 2-4. Clean up Connect integration + security profile ---
+    if connect_instance_id:
+        connect_client = session.client('connect')
+        appintegrations_client = session.client('appintegrations')
+
+        # Find the MCP app
+        app_name = f'{stack_name} MCP Server'
+        app_namespace = gateway_id
+        app_arn, app_id = None, None
+        try:
+            app_arn, app_id = find_existing_mcp_app(
+                appintegrations_client, app_namespace, app_name,
+            )
+        except Exception:
+            logger.debug('Could not search for MCP app', exc_info=True)
+
+        # 2. Clear security profile MCP apps
+        sp_id = None
+        try:
+            paginator = connect_client.get_paginator('list_security_profiles')
+            for page in paginator.paginate(InstanceId=connect_instance_id):
+                for sp in page.get('SecurityProfileSummaryList', []):
+                    if sp.get('Name') == SECURITY_PROFILE_NAME:
+                        sp_id = sp['Id']
+                        break
+                if sp_id:
+                    break
+        except Exception:
+            pass
+
+        if sp_id:
+            logger.info('Clearing MCP apps from security profile: %s', sp_id)
+            try:
+                connect_client.update_security_profile(
+                    SecurityProfileId=sp_id,
+                    InstanceId=connect_instance_id,
+                    Applications=[],
+                )
+                logger.info('Security profile MCP apps cleared.')
+            except Exception as e:
+                logger.warning('Could not clear security profile apps: %s', e)
+
+            if delete_security_profile:
+                try:
+                    connect_client.delete_security_profile(
+                        SecurityProfileId=sp_id,
+                        InstanceId=connect_instance_id,
+                    )
+                    logger.info('Security profile deleted.')
+                except Exception as e:
+                    logger.warning('Could not delete security profile: %s', e)
+            else:
+                logger.info('Security profile kept (reused on next deploy). '
+                            'Use --delete-security-profile to attempt deletion.')
+
+        # 3. Delete integration association
+        if app_arn:
+            assoc_id = find_existing_connect_association(
+                connect_client, connect_instance_id, app_arn,
+            )
+            if assoc_id:
+                logger.info('Deleting Connect integration association: %s', assoc_id)
+                try:
+                    connect_client.delete_integration_association(
+                        InstanceId=connect_instance_id,
+                        IntegrationAssociationId=assoc_id,
+                    )
+                    logger.info('Integration association deleted.')
+                except Exception as e:
+                    logger.warning('Could not delete integration association: %s', e)
+
+        # 4. Delete app integration
+        if app_arn:
+            logger.info('Deleting MCP app integration: %s', app_arn)
+            try:
+                appintegrations_client.delete_application(Arn=app_arn)
+                logger.info('App integration deleted.')
+            except Exception as e:
+                logger.warning('Could not delete app integration: %s', e)
+
+    # --- 5-6. Delete MCP gateway target + gateway ---
+    if gateway_id:
+        agentcore_client = session.client('bedrock-agentcore-control')
+
+        # 5. Delete gateway target
+        target_id = find_existing_target(agentcore_client, gateway_id, MCP_TARGET_NAME)
+        if target_id:
+            logger.info('Deleting MCP gateway target: %s (%s)', MCP_TARGET_NAME, target_id)
+            try:
+                agentcore_client.delete_gateway_target(
+                    gatewayIdentifier=gateway_id, targetId=target_id,
+                )
+                logger.info('Gateway target deleted (may take a moment).')
+                time.sleep(10)
+            except Exception as e:
+                logger.warning('Could not delete gateway target: %s', e)
+
+        # 6. Delete gateway
+        logger.info('Deleting MCP gateway: %s', gateway_id)
+        try:
+            agentcore_client.delete_gateway(gatewayIdentifier=gateway_id)
+            logger.info('MCP gateway deleted (may take a moment).')
+            time.sleep(5)
+        except Exception as e:
+            logger.warning('Could not delete MCP gateway: %s', e)
+
+    # --- 7. Delete API key credential ---
+    try:
+        agentcore_client = session.client('bedrock-agentcore-control')
+        logger.info('Deleting API key credential: %s', API_KEY_CREDENTIAL_NAME)
+        agentcore_client.delete_api_key_credential_provider(
+            name=API_KEY_CREDENTIAL_NAME,
+        )
+        logger.info('API key credential deleted.')
+    except Exception as e:
+        logger.warning('Could not delete API key credential: %s', e)
+
+    # --- 8. Delete CloudFormation stack ---
+    if stack_exists(cf_client, stack_name):
+        delete_stack(cf_client, stack_name)
+    else:
+        logger.info('CloudFormation stack already deleted.')
+
+    logger.info('')
+    logger.info('=' * 60)
+    logger.info('Teardown complete for: %s', stack_name)
+    logger.info('=' * 60)
+
+
 # ---------------------------------------------------------------------------
 # Lambda packaging
 # ---------------------------------------------------------------------------
@@ -356,55 +483,6 @@ def update_lambda_code(lambda_client, function_name, code_dir):
         ZipFile=zip_bytes,
     )
     logger.info('Updated. Version: %s', resp.get('Version', 'N/A'))
-
-
-# ---------------------------------------------------------------------------
-# KB document seeding (to thrive-at-work's existing KB bucket)
-# ---------------------------------------------------------------------------
-
-
-def seed_kb_documents(s3_client, bucket_name):
-    """Upload KB expansion documents to the existing thrive KB bucket."""
-    if not os.path.isdir(KB_DOCUMENTS_DIR):
-        logger.warning('KB documents directory not found: %s', KB_DOCUMENTS_DIR)
-        return 0
-
-    allowed_extensions = {'.txt', '.html', '.htm', '.pdf', '.docx'}
-    uploaded = 0
-
-    for subfolder, s3_prefix in KB_DOCUMENT_FOLDER_MAP.items():
-        local_dir = os.path.join(KB_DOCUMENTS_DIR, subfolder)
-        if not os.path.isdir(local_dir):
-            continue
-
-        for filename in sorted(os.listdir(local_dir)):
-            _, ext = os.path.splitext(filename)
-            if ext.lower() not in allowed_extensions:
-                continue
-
-            local_path = os.path.join(local_dir, filename)
-            s3_key = f'{s3_prefix}{filename}'
-
-            content_types = {
-                '.txt': 'text/plain',
-                '.html': 'text/html',
-                '.htm': 'text/html',
-                '.pdf': 'application/pdf',
-                '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            }
-            content_type = content_types.get(ext.lower(), 'application/octet-stream')
-
-            with open(local_path, 'rb') as f:
-                s3_client.put_object(
-                    Bucket=bucket_name,
-                    Key=s3_key,
-                    Body=f.read(),
-                    ContentType=content_type,
-                )
-            logger.info('Uploaded: s3://%s/%s', bucket_name, s3_key)
-            uploaded += 1
-
-    return uploaded
 
 
 # ---------------------------------------------------------------------------
@@ -505,8 +583,8 @@ def create_or_update_mcp_target(agentcore_client, gateway_id, target_name,
         }
     ]
     target_description = (
-        'Stability360 Actions API — Scoring, CharityTracker, Follow-up '
-        '(3 MCP tools via single API Gateway)'
+        'Stability360 Actions API — Scoring + Resource Lookup '
+        '(2 MCP tools via single API Gateway)'
     )
 
     existing_target_id = find_existing_target(agentcore_client, gateway_id, target_name)
@@ -645,7 +723,7 @@ def register_mcp_with_connect(session, connect_instance_id, gateway_url,
             Name=app_name,
             Namespace=namespace,
             ApplicationType='MCP_SERVER',
-            Description='Stability360 Actions MCP tool server (3 action tools)',
+            Description=f'Stability360 Actions MCP tool server ({len(MCP_TOOL_OPERATIONS)} tools)',
             ApplicationSourceConfig={
                 'ExternalUrlConfig': {'AccessUrl': gateway_url}
             },
@@ -922,8 +1000,8 @@ def _build_agent_tool_configurations(gateway_id, assistant_id=None,
                                       kb_association_id=None):
     """Build tool configurations for the actions agent.
 
-    Includes: Complete, Escalate, Retrieve (KB), and 3 MCP action tools.
-    Does NOT include employee lookup.
+    Includes: Complete, Escalate, Retrieve (KB), and 2 MCP action tools
+    (scoringCalculate + resourceLookup).
     """
     retrieve_tool = {
         'toolName': 'Retrieve',
@@ -979,13 +1057,9 @@ def _build_agent_tool_configurations(gateway_id, assistant_id=None,
         retrieve_tool,
     ]
 
-    # Add 3 MCP action tools
+    # Add MCP action tools (Phase 0: scoring + resource lookup only)
     tool_instructions = {
         'scoringCalculate': SCORING_TOOL_INSTRUCTION,
-        'charityTrackerSubmit': CHARITYTRACKER_TOOL_INSTRUCTION,
-        'followupSchedule': FOLLOWUP_TOOL_INSTRUCTION,
-        'customerProfileLookup': CUSTOMER_PROFILE_TOOL_INSTRUCTION,
-        'caseStatusLookup': CASE_STATUS_TOOL_INSTRUCTION,
         'resourceLookup': RESOURCE_LOOKUP_TOOL_INSTRUCTION,
     }
 
@@ -1216,542 +1290,13 @@ def generate_tool_config_file(gateway_id, target_name, agent_name,
 
 
 # ---------------------------------------------------------------------------
-# Lex V2 Intake Bot — ListPicker-driven routing bot
-# ---------------------------------------------------------------------------
-
-
-def ensure_lex_bot_role(iam_client, role_name, account_id):
-    """Create (or retrieve) an IAM role for the Lex V2 bot.
-
-    Grants lexv2.amazonaws.com trust + polly permissions.
-    The intake bot doesn't need QinConnect or wisdom — it only routes.
-    """
-    trust_policy = json.dumps({
-        'Version': '2012-10-17',
-        'Statement': [
-            {
-                'Effect': 'Allow',
-                'Principal': {'Service': 'lexv2.amazonaws.com'},
-                'Action': 'sts:AssumeRole',
-            }
-        ]
-    })
-
-    permissions_policy = json.dumps({
-        'Version': '2012-10-17',
-        'Statement': [
-            {
-                'Sid': 'Polly',
-                'Effect': 'Allow',
-                'Action': ['polly:SynthesizeSpeech'],
-                'Resource': '*',
-            },
-        ]
-    })
-
-    role_exists = False
-    try:
-        resp = iam_client.get_role(RoleName=role_name)
-        role_arn = resp['Role']['Arn']
-        role_exists = True
-        logger.info('Lex bot IAM role already exists: %s', role_arn)
-    except iam_client.exceptions.NoSuchEntityException:
-        pass
-
-    if not role_exists:
-        logger.info('Creating IAM role for Lex bot: %s', role_name)
-        resp = iam_client.create_role(
-            RoleName=role_name,
-            AssumeRolePolicyDocument=trust_policy,
-            Description='IAM role for Stability360 Intake Lex V2 bot',
-        )
-        role_arn = resp['Role']['Arn']
-        logger.info('IAM role created: %s', role_arn)
-
-    iam_client.put_role_policy(
-        RoleName=role_name,
-        PolicyName='PollyAccess',
-        PolicyDocument=permissions_policy,
-    )
-    logger.info('Lex bot IAM policy updated (polly).')
-
-    if not role_exists:
-        logger.info('Waiting for IAM role propagation...')
-        time.sleep(10)
-    return role_arn
-
-
-def find_existing_lex_bot(lex_client, bot_name):
-    """Find an existing Lex V2 bot by name.
-
-    Returns (bot_id, bot_status) or (None, None) if not found.
-    """
-    try:
-        resp = lex_client.list_bots(
-            filters=[{
-                'name': 'BotName',
-                'values': [bot_name],
-                'operator': 'EQ',
-            }]
-        )
-        for summary in resp.get('botSummaries', []):
-            return summary['botId'], summary.get('botStatus', 'Unknown')
-    except ClientError:
-        logger.debug('Could not list Lex bots', exc_info=True)
-    return None, None
-
-
-def find_existing_bot_alias(lex_client, bot_id, alias_name):
-    """Find an existing bot alias by name.
-
-    Returns (alias_id, alias_arn) or (None, None) if not found.
-    """
-    try:
-        resp = lex_client.list_bot_aliases(botId=bot_id)
-        for summary in resp.get('botAliasSummaries', []):
-            if summary.get('botAliasName', '').lower() == alias_name.lower():
-                return summary['botAliasId'], None
-    except ClientError:
-        logger.debug('Could not list bot aliases', exc_info=True)
-    return None, None
-
-
-def wait_for_bot_locale_build(lex_client, bot_id, bot_version, locale_id,
-                               timeout=LEX_BOT_BUILD_TIMEOUT,
-                               poll_interval=LEX_BOT_BUILD_POLL_INTERVAL):
-    """Poll until the bot locale build completes.
-
-    Returns the final botLocaleStatus string ('Built' or 'Failed').
-    """
-    start = time.time()
-    while True:
-        elapsed = time.time() - start
-        if elapsed > timeout:
-            logger.error('Bot locale build timed out after %ds.', timeout)
-            return 'Timeout'
-
-        try:
-            resp = lex_client.describe_bot_locale(
-                botId=bot_id, botVersion=bot_version, localeId=locale_id,
-            )
-            status = resp.get('botLocaleStatus', 'Unknown')
-        except Exception as e:
-            logger.warning('Could not check build status: %s', e)
-            status = 'Unknown'
-
-        if status in ('Built', 'ReadyExpressTesting'):
-            return 'Built'
-        if status == 'Failed':
-            reasons = resp.get('failureReasons', [])
-            logger.error('Bot locale build failed: %s', reasons)
-            return 'Failed'
-
-        logger.info('  Build status: %s (%.0fs elapsed)', status, elapsed)
-        time.sleep(poll_interval)
-
-
-def create_intake_lex_bot(session, bot_name, bot_description, role_arn,
-                          intake_lambda_arn, connect_instance_id,
-                          locale_id=LEX_BOT_LOCALE,
-                          nlu_threshold=LEX_BOT_NLU_THRESHOLD,
-                          idle_session_ttl=LEX_BOT_IDLE_SESSION_TTL,
-                          alias_name=INTAKE_BOT_ALIAS_NAME):
-    """Create the Stability360 Intake Lex V2 bot.
-
-    The intake bot uses a single-slot loop pattern:
-      - IntakeIntent with one FreeFormInput slot (IntakeResponse)
-      - Dialog + elicitation + fulfillment code hooks -> Lambda sends ListPicker
-      - RouteToCommunityResources intent (programmatic — no utterances)
-      - RouteToThriveAtWork intent (programmatic — no utterances)
-
-    The Lambda switches the active intent to RouteToCommunityResources or
-    RouteToThriveAtWork based on the user's ListPicker selection.  The contact
-    flow then conditions on the returned intent name to route the customer.
-
-    Returns a dict with botId, botVersion, botAliasId, botAliasArn or None.
-    """
-    lex_client = session.client('lexv2-models')
-    region = session.region_name
-    account_id = session.client('sts').get_caller_identity()['Account']
-
-    # --- Sub-step 1: Create or find bot ---
-    bot_id = None
-    try:
-        bots = lex_client.list_bots(
-            filters=[{'name': 'BotName', 'values': [bot_name], 'operator': 'EQ'}],
-        )
-        for b in bots.get('botSummaries', []):
-            if b['botName'] == bot_name:
-                bot_id = b['botId']
-                break
-    except ClientError:
-        logger.debug('Could not list bots for intake bot lookup', exc_info=True)
-
-    if bot_id:
-        logger.info('Intake bot already exists: %s (ID: %s)', bot_name, bot_id)
-    else:
-        logger.info('Creating intake bot: %s', bot_name)
-        resp = lex_client.create_bot(
-            botName=bot_name,
-            description=bot_description,
-            roleArn=role_arn,
-            dataPrivacy={'childDirected': False},
-            idleSessionTTLInSeconds=idle_session_ttl,
-        )
-        bot_id = resp['botId']
-        logger.info('Intake bot created. ID: %s', bot_id)
-        time.sleep(3)
-
-    # --- Sub-step 2: Create bot locale ---
-    try:
-        lex_client.describe_bot_locale(
-            botId=bot_id, botVersion='DRAFT', localeId=locale_id,
-        )
-        logger.info('Bot locale %s already exists.', locale_id)
-    except lex_client.exceptions.ResourceNotFoundException:
-        logger.info('Creating bot locale: %s', locale_id)
-        lex_client.create_bot_locale(
-            botId=bot_id,
-            botVersion='DRAFT',
-            localeId=locale_id,
-            nluIntentConfidenceThreshold=nlu_threshold,
-        )
-        logger.info('Bot locale created.')
-        time.sleep(2)
-
-    # --- Sub-step 3: Create IntakeIntent ---
-    intake_intent_id = None
-    try:
-        intents = lex_client.list_intents(
-            botId=bot_id, botVersion='DRAFT', localeId=locale_id,
-        )
-        for i in intents.get('intentSummaries', []):
-            if i.get('intentName') == 'IntakeIntent':
-                intake_intent_id = i['intentId']
-                break
-    except ClientError:
-        logger.debug('Could not list intents for IntakeIntent lookup', exc_info=True)
-
-    if intake_intent_id:
-        logger.info('IntakeIntent already exists (ID: %s).', intake_intent_id)
-    else:
-        logger.info('Creating IntakeIntent...')
-        resp = lex_client.create_intent(
-            intentName='IntakeIntent',
-            botId=bot_id,
-            botVersion='DRAFT',
-            localeId=locale_id,
-            description='Main intake intent — shows service menu via ListPicker',
-            sampleUtterances=[
-                {'utterance': 'hello'},
-                {'utterance': 'hi'},
-                {'utterance': 'help'},
-                {'utterance': 'get started'},
-                {'utterance': 'start'},
-                {'utterance': 'menu'},
-                {'utterance': 'options'},
-                {'utterance': 'services'},
-            ],
-            dialogCodeHook={'enabled': True},
-            fulfillmentCodeHook={'enabled': True},
-        )
-        intake_intent_id = resp['intentId']
-        logger.info('IntakeIntent created (ID: %s).', intake_intent_id)
-        time.sleep(1)
-
-    # --- Sub-step 3b: Create IntakeResponse slot on IntakeIntent ---
-    intake_slot_id = None
-    try:
-        slots = lex_client.list_slots(
-            botId=bot_id, botVersion='DRAFT', localeId=locale_id,
-            intentId=intake_intent_id,
-        )
-        for s in slots.get('slotSummaries', []):
-            if s.get('slotName') == 'IntakeResponse':
-                intake_slot_id = s['slotId']
-                break
-    except ClientError:
-        logger.debug('Could not list slots for IntakeResponse lookup', exc_info=True)
-
-    slot_value_elicitation = {
-        'slotConstraint': 'Required',
-        'promptSpecification': {
-            'messageGroups': [{
-                'message': {
-                    'plainTextMessage': {
-                        'value': 'Please select a service from the menu.',
-                    },
-                },
-            }],
-            'maxRetries': 2,
-        },
-        'slotCaptureSetting': {
-            'captureNextStep': {
-                'dialogAction': {'type': 'InvokeDialogCodeHook'},
-            },
-            'failureNextStep': {
-                'dialogAction': {
-                    'type': 'ElicitSlot',
-                    'slotToElicit': 'IntakeResponse',
-                },
-            },
-            'codeHook': {
-                'enableCodeHookInvocation': True,
-                'active': True,
-                'postCodeHookSpecification': {},
-            },
-            'elicitationCodeHook': {
-                'enableCodeHookInvocation': True,
-            },
-        },
-    }
-
-    if intake_slot_id:
-        logger.info('IntakeResponse slot already exists (ID: %s) — updating...', intake_slot_id)
-        try:
-            lex_client.update_slot(
-                slotId=intake_slot_id,
-                slotName='IntakeResponse',
-                botId=bot_id,
-                botVersion='DRAFT',
-                localeId=locale_id,
-                intentId=intake_intent_id,
-                slotTypeId='AMAZON.FreeFormInput',
-                valueElicitationSetting=slot_value_elicitation,
-            )
-        except ClientError as e:
-            logger.warning('Could not update IntakeResponse slot: %s', e)
-    else:
-        logger.info('Creating IntakeResponse slot...')
-        resp = lex_client.create_slot(
-            slotName='IntakeResponse',
-            botId=bot_id,
-            botVersion='DRAFT',
-            localeId=locale_id,
-            intentId=intake_intent_id,
-            slotTypeId='AMAZON.FreeFormInput',
-            valueElicitationSetting=slot_value_elicitation,
-        )
-        intake_slot_id = resp['slotId']
-        logger.info('IntakeResponse slot created (ID: %s).', intake_slot_id)
-
-    # --- Sub-step 3c: Ensure IntakeIntent priorities include IntakeResponse ---
-    try:
-        lex_client.update_intent(
-            intentId=intake_intent_id,
-            intentName='IntakeIntent',
-            botId=bot_id,
-            botVersion='DRAFT',
-            localeId=locale_id,
-            description='Main intake intent — shows service menu via ListPicker',
-            sampleUtterances=[
-                {'utterance': 'hello'},
-                {'utterance': 'hi'},
-                {'utterance': 'help'},
-                {'utterance': 'get started'},
-                {'utterance': 'start'},
-                {'utterance': 'menu'},
-                {'utterance': 'options'},
-                {'utterance': 'services'},
-            ],
-            dialogCodeHook={'enabled': True},
-            fulfillmentCodeHook={'enabled': True},
-            slotPriorities=[
-                {'priority': 1, 'slotId': intake_slot_id},
-            ],
-        )
-        logger.info('IntakeIntent updated with slot priorities.')
-    except Exception as e:
-        logger.warning('Could not update IntakeIntent slot priorities: %s', e)
-
-    # --- Sub-step 4: Create routing intents ---
-    for route_intent_name in ('RouteToCommunityResources', 'RouteToThriveAtWork'):
-        route_id = None
-        try:
-            intents = lex_client.list_intents(
-                botId=bot_id, botVersion='DRAFT', localeId=locale_id,
-            )
-            for i in intents.get('intentSummaries', []):
-                if i.get('intentName') == route_intent_name:
-                    route_id = i['intentId']
-                    break
-        except ClientError:
-            logger.debug('Could not list intents for %s lookup', route_intent_name, exc_info=True)
-
-        if route_id:
-            logger.info('%s already exists (ID: %s).', route_intent_name, route_id)
-        else:
-            logger.info('Creating %s intent...', route_intent_name)
-            lex_client.create_intent(
-                intentName=route_intent_name,
-                botId=bot_id,
-                botVersion='DRAFT',
-                localeId=locale_id,
-                description=f'Programmatic routing intent — set by Lambda (no utterances)',
-            )
-            logger.info('%s created.', route_intent_name)
-
-    # --- Sub-step 5: Update FallbackIntent to invoke code hook ---
-    try:
-        intents = lex_client.list_intents(
-            botId=bot_id, botVersion='DRAFT', localeId=locale_id,
-        )
-        fallback_id = None
-        for i in intents.get('intentSummaries', []):
-            if i.get('intentName') == 'FallbackIntent':
-                fallback_id = i['intentId']
-                break
-        if fallback_id:
-            lex_client.update_intent(
-                intentId=fallback_id,
-                intentName='FallbackIntent',
-                botId=bot_id,
-                botVersion='DRAFT',
-                localeId=locale_id,
-                parentIntentSignature='AMAZON.FallbackIntent',
-                fulfillmentCodeHook={'enabled': True},
-            )
-            logger.info('FallbackIntent updated to invoke code hook.')
-    except Exception as e:
-        logger.warning('Could not update FallbackIntent: %s', e)
-
-    # --- Sub-step 6: Build bot locale ---
-    logger.info('Building intake bot locale...')
-    lex_client.build_bot_locale(
-        botId=bot_id, botVersion='DRAFT', localeId=locale_id,
-    )
-    build_status = wait_for_bot_locale_build(
-        lex_client, bot_id, 'DRAFT', locale_id,
-    )
-    if build_status != 'Built':
-        logger.error('Intake bot locale build did not succeed: %s', build_status)
-        return None
-    logger.info('Intake bot locale built successfully.')
-
-    # --- Sub-step 7: Create bot version ---
-    logger.info('Creating intake bot version...')
-    resp = lex_client.create_bot_version(
-        botId=bot_id,
-        botVersionLocaleSpecification={
-            locale_id: {'sourceBotVersion': 'DRAFT'}
-        },
-        description='Auto-created by deploy.py',
-    )
-    bot_version = resp['botVersion']
-    ver_status = resp.get('botStatus', 'Creating')
-    logger.info('Intake bot version: %s (status: %s)', bot_version, ver_status)
-
-    if ver_status != 'Available':
-        _ver_start = time.time()
-        time.sleep(2)
-        while time.time() - _ver_start < LEX_BOT_BUILD_TIMEOUT:
-            try:
-                desc = lex_client.describe_bot_version(botId=bot_id, botVersion=bot_version)
-                ver_status = desc.get('botStatus', 'Unknown')
-            except lex_client.exceptions.ResourceNotFoundException:
-                elapsed = int(time.time() - _ver_start)
-                logger.info('  Intake bot version not yet available (%ds elapsed)', elapsed)
-                time.sleep(LEX_BOT_BUILD_POLL_INTERVAL)
-                continue
-            if ver_status == 'Available':
-                logger.info('Intake bot version %s is Available.', bot_version)
-                break
-            if ver_status in ('Failed', 'Deleting'):
-                raise RuntimeError(f'Intake bot version {bot_version} entered {ver_status} state.')
-            elapsed = int(time.time() - _ver_start)
-            logger.info('  Intake bot version status: %s (%ds elapsed)', ver_status, elapsed)
-            time.sleep(LEX_BOT_BUILD_POLL_INTERVAL)
-        else:
-            raise TimeoutError(f'Intake bot version did not become Available within {LEX_BOT_BUILD_TIMEOUT}s')
-
-    # --- Sub-step 8: Create or update bot alias with Lambda code hook ---
-    alias_id, _ = find_existing_bot_alias(lex_client, bot_id, alias_name)
-    code_hook_spec = {
-        locale_id: {
-            'enabled': True,
-            'codeHookSpecification': {
-                'lambdaCodeHook': {
-                    'lambdaARN': intake_lambda_arn,
-                    'codeHookInterfaceVersion': '1.0',
-                },
-            },
-        },
-    }
-
-    if alias_id:
-        logger.info('Intake bot alias exists: %s (ID: %s) — updating to version %s...',
-                     alias_name, alias_id, bot_version)
-        lex_client.update_bot_alias(
-            botAliasId=alias_id,
-            botAliasName=alias_name,
-            botId=bot_id,
-            botVersion=bot_version,
-            botAliasLocaleSettings=code_hook_spec,
-        )
-        logger.info('Intake bot alias updated.')
-    else:
-        logger.info('Creating intake bot alias: %s -> version %s', alias_name, bot_version)
-        resp = lex_client.create_bot_alias(
-            botAliasName=alias_name,
-            botId=bot_id,
-            botVersion=bot_version,
-            botAliasLocaleSettings=code_hook_spec,
-            description='Live alias for Connect integration',
-        )
-        alias_id = resp['botAliasId']
-        logger.info('Intake bot alias created. ID: %s', alias_id)
-
-    # --- Sub-step 9: Add Lambda permission for Lex to invoke ---
-    lambda_client = session.client('lambda')
-    statement_id = f'LexV2-{bot_id}-{alias_id}'
-    try:
-        lambda_client.add_permission(
-            FunctionName=intake_lambda_arn,
-            StatementId=statement_id,
-            Action='lambda:InvokeFunction',
-            Principal='lexv2.amazonaws.com',
-            SourceArn=f'arn:aws:lex:{region}:{account_id}:bot-alias/{bot_id}/{alias_id}',
-        )
-        logger.info('Lambda permission added for Lex invocation.')
-    except lambda_client.exceptions.ResourceConflictException:
-        logger.info('Lambda permission already exists.')
-    except Exception as e:
-        logger.warning('Could not add Lambda permission: %s', e)
-
-    bot_alias_arn = f'arn:aws:lex:{region}:{account_id}:bot-alias/{bot_id}/{alias_id}'
-    logger.info('Intake bot alias ARN: %s', bot_alias_arn)
-
-    # --- Sub-step 10: Associate with Connect ---
-    connect_client = session.client('connect')
-    try:
-        connect_client.associate_bot(
-            InstanceId=connect_instance_id,
-            LexV2Bot={'AliasArn': bot_alias_arn},
-        )
-        logger.info('Intake bot associated with Connect instance %s.', connect_instance_id)
-    except Exception as e:
-        err_str = str(e).lower()
-        if 'already' in err_str or 'duplicate' in err_str or 'conflict' in err_str:
-            logger.info('Intake bot already associated with Connect instance.')
-        else:
-            logger.warning('Could not associate intake bot with Connect: %s', e)
-
-    return {
-        'botId': bot_id,
-        'botVersion': bot_version,
-        'botAliasId': alias_id,
-        'botAliasArn': bot_alias_arn,
-    }
-
-
-# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Deploy Stability360 Actions stack (3 MCP tools)',
+        description='Deploy Stability360 Actions stack (2 MCP tools)',
     )
     parser.add_argument('--stack-name', default=DEFAULT_STACK_NAME)
     parser.add_argument('--region', default=DEFAULT_REGION)
@@ -1759,11 +1304,6 @@ def main():
                         choices=['dev', 'staging', 'prod'])
     parser.add_argument('--enable-mcp', action='store_true')
     parser.add_argument('--connect-instance-id', default='')
-    parser.add_argument('--thrive-stack-name', default='',
-                        help='Thrive-at-work stack name (for KB bucket name lookup)')
-    parser.add_argument('--kb-bucket', default='',
-                        help='Override: KB bucket name to seed documents to')
-    parser.add_argument('--seed-only', action='store_true')
     parser.add_argument('--update-code-only', action='store_true')
     parser.add_argument('--update-prompt', action='store_true')
     parser.add_argument('--connect-only', action='store_true',
@@ -1771,11 +1311,13 @@ def main():
     parser.add_argument('--openapi-spec-url', default='',
                         help='URL for MCP-facing OpenAPI spec (auto-detected if not set)')
     parser.add_argument('--model-id', default=ORCHESTRATION_PROMPT_MODEL)
-    parser.add_argument('--ses-sender', default='')
-    parser.add_argument('--charitytracker-recipient', default='')
-    parser.add_argument('--delete', action='store_true')
-    parser.add_argument('--no-seed-kb', action='store_false', dest='seed_kb')
-    parser.set_defaults(seed_kb=True)
+    parser.add_argument('--delete', action='store_true',
+                        help='Delete CFN stack only (use --teardown for full cleanup)')
+    parser.add_argument('--teardown', action='store_true',
+                        help='Full teardown: delete all resources (MCP gateway, agent, prompt, '
+                             'integration, credentials, CFN stack)')
+    parser.add_argument('--delete-security-profile', action='store_true',
+                        help='With --teardown: also attempt to delete the Connect security profile')
     args = parser.parse_args()
 
     # Init resource names
@@ -1791,23 +1333,17 @@ def main():
     session = boto3.Session(region_name=args.region)
     cf_client = session.client('cloudformation')
 
-    # --- Delete mode ---
-    if args.delete:
-        delete_stack(cf_client, args.stack_name)
+    # --- Teardown mode (full cleanup) ---
+    if args.teardown:
+        if not args.connect_instance_id:
+            logger.warning('No --connect-instance-id provided — only CFN + MCP resources will be deleted.')
+        teardown_all(session, args.stack_name, args.connect_instance_id, args.region,
+                     delete_security_profile=args.delete_security_profile)
         return
 
-    # --- Seed-only mode ---
-    if args.seed_only:
-        kb_bucket = args.kb_bucket
-        if not kb_bucket and args.thrive_stack_name:
-            thrive_outputs = get_stack_outputs(cf_client, args.thrive_stack_name)
-            kb_bucket = thrive_outputs.get('KnowledgeBaseBucketName', '')
-        if not kb_bucket:
-            logger.error('KB bucket not specified. Use --kb-bucket or --thrive-stack-name')
-            sys.exit(1)
-        s3_client = session.client('s3')
-        count = seed_kb_documents(s3_client, kb_bucket)
-        logger.info('Seeded %d KB documents to %s', count, kb_bucket)
+    # --- Delete mode (CFN stack only) ---
+    if args.delete:
+        delete_stack(cf_client, args.stack_name)
         return
 
     # --- Update code only ---
@@ -1815,9 +1351,6 @@ def main():
         outputs = get_stack_outputs(cf_client, args.stack_name)
         lambda_client = session.client('lambda')
         update_lambda_code(lambda_client, outputs['ActionsFunctionName'], LAMBDA_CODE_DIR)
-        intake_fn = outputs.get('IntakeBotFunctionName', '')
-        if intake_fn:
-            update_lambda_code(lambda_client, intake_fn, INTAKE_LAMBDA_CODE_DIR)
         return
 
     # --- Update prompt only ---
@@ -1936,36 +1469,10 @@ def main():
                 agent_id, assistant_id, MCP_TOOL_CONFIG_FILE,
             )
         logger.info('')
-        logger.info('--- Step 14: Create Intake Bot (service routing) ---')
-        intake_result = None
-        intake_lambda_arn = outputs.get('IntakeBotFunctionArn', '')
-        if intake_lambda_arn:
-            iam_client = session.client('iam')
-            account_id = session.client('sts').get_caller_identity()['Account']
-            lex_role_arn = ensure_lex_bot_role(iam_client, LEX_BOT_ROLE_NAME, account_id)
-            intake_result = create_intake_lex_bot(
-                session=session,
-                bot_name=INTAKE_BOT_NAME,
-                bot_description=INTAKE_BOT_DESCRIPTION,
-                role_arn=lex_role_arn,
-                intake_lambda_arn=intake_lambda_arn,
-                connect_instance_id=args.connect_instance_id,
-                locale_id=LEX_BOT_LOCALE,
-                nlu_threshold=LEX_BOT_NLU_THRESHOLD,
-                idle_session_ttl=LEX_BOT_IDLE_SESSION_TTL,
-                alias_name=INTAKE_BOT_ALIAS_NAME,
-            )
-            if intake_result:
-                logger.info('Intake bot ready: %s', intake_result['botAliasArn'])
-        else:
-            logger.warning('IntakeBotFunctionArn not in stack outputs — skipping intake bot.')
-        logger.info('')
         logger.info('=' * 60)
         logger.info('Connect-only deployment complete!')
         logger.info('Agent: %s', agent_id or 'N/A')
         logger.info('Tools: %s', ', '.join(MCP_TOOL_OPERATIONS))
-        if intake_result:
-            logger.info('Intake Bot: %s', intake_result['botAliasArn'])
         logger.info('=' * 60)
         return
 
@@ -2024,8 +1531,6 @@ def main():
         connect_instance_id=args.connect_instance_id,
         connect_instance_url=connect_instance_url,
         openapi_spec_url=openapi_spec_url,
-        ses_sender=args.ses_sender,
-        charitytracker_recipient=args.charitytracker_recipient,
     )
 
     if action in ('CREATE', 'UPDATE'):
@@ -2053,28 +1558,6 @@ def main():
     logger.info('--- Step 3: Update Lambda code ---')
     lambda_client = session.client('lambda')
     update_lambda_code(lambda_client, actions_function, LAMBDA_CODE_DIR)
-    intake_fn = outputs.get('IntakeBotFunctionName', '')
-    if intake_fn:
-        update_lambda_code(lambda_client, intake_fn, INTAKE_LAMBDA_CODE_DIR)
-
-    # --- Step 4: Seed KB documents ---
-    if args.seed_kb:
-        logger.info('')
-        logger.info('--- Step 4: Seed KB expansion documents ---')
-        kb_bucket = args.kb_bucket
-        if not kb_bucket and args.thrive_stack_name:
-            try:
-                thrive_outputs = get_stack_outputs(cf_client, args.thrive_stack_name)
-                kb_bucket = thrive_outputs.get('KnowledgeBaseBucketName', '')
-            except Exception:
-                logger.warning('Could not read thrive stack outputs')
-        if kb_bucket:
-            s3_client = session.client('s3')
-            count = seed_kb_documents(s3_client, kb_bucket)
-            logger.info('Seeded %d KB documents to %s', count, kb_bucket)
-        else:
-            logger.warning('No KB bucket specified — skipping KB seed.')
-            logger.info('  Use --thrive-stack-name or --kb-bucket to provide the bucket.')
 
     # --- MCP Steps (5-7) ---
     if args.enable_mcp or args.connect_instance_id:
@@ -2177,35 +1660,6 @@ def main():
                 agent_id, assistant_id, MCP_TOOL_CONFIG_FILE,
             )
 
-        # Step 14: Create Intake Bot (ListPicker menu -> service routing)
-        logger.info('')
-        logger.info('--- Step 14: Create Intake Bot (service routing) ---')
-        intake_result = None
-        intake_lambda_arn = outputs.get('IntakeBotFunctionArn', '')
-        if intake_lambda_arn:
-            iam_client = session.client('iam')
-            account_id = session.client('sts').get_caller_identity()['Account']
-            lex_role_arn = ensure_lex_bot_role(iam_client, LEX_BOT_ROLE_NAME, account_id)
-
-            intake_result = create_intake_lex_bot(
-                session=session,
-                bot_name=INTAKE_BOT_NAME,
-                bot_description=INTAKE_BOT_DESCRIPTION,
-                role_arn=lex_role_arn,
-                intake_lambda_arn=intake_lambda_arn,
-                connect_instance_id=args.connect_instance_id,
-                locale_id=LEX_BOT_LOCALE,
-                nlu_threshold=LEX_BOT_NLU_THRESHOLD,
-                idle_session_ttl=LEX_BOT_IDLE_SESSION_TTL,
-                alias_name=INTAKE_BOT_ALIAS_NAME,
-            )
-            if intake_result:
-                logger.info('Intake bot ready: %s', intake_result['botAliasArn'])
-            else:
-                logger.warning('Intake bot creation failed.')
-        else:
-            logger.warning('IntakeBotFunctionArn not in stack outputs — skipping intake bot.')
-
     # --- Summary ---
     logger.info('')
     logger.info('=' * 60)
@@ -2223,17 +1677,10 @@ def main():
         logger.info('Connect:         %s', args.connect_instance_id)
         logger.info('Agent:           %s (NOT default)', AI_AGENT_NAME)
         logger.info('Security Profile:%s', SECURITY_PROFILE_NAME)
-        if intake_result:
-            logger.info('Intake Bot:  %s (ID: %s)', INTAKE_BOT_NAME, intake_result['botId'])
-            logger.info('Intake Alias: %s', intake_result['botAliasArn'])
 
     logger.info('')
     logger.info('Test endpoints:')
     logger.info('  POST %s/scoring/calculate', api_url)
-    logger.info('  POST %s/charitytracker/submit', api_url)
-    logger.info('  POST %s/followup/schedule', api_url)
-    logger.info('  POST %s/customer/profile', api_url)
-    logger.info('  POST %s/case/status', api_url)
     logger.info('  POST %s/resources/search', api_url)
 
 

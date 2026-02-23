@@ -1,0 +1,316 @@
+
+<!-- Formatted & color‑coded Markdown version of TUW13.pdf -->
+
+# <span style="color:#0B5FFF">Trident United Way – Stability360 POC</span>
+
+**CX Design Document — Stability360 Proof of Concept**  
+**Amazon Connect WebChat Implementation**  
+**Version 2.1 — February 09, 2026**  
+
+---
+
+## <span style="color:#1E7F34">Table of Contents</span>
+- Document History  
+- Contact Information  
+- 1. Executive Summary  
+  - 1.1 Phase 0 Success Criteria  
+- 2. Platform Overview  
+  - 2.1 Channels  
+  - 2.2 Entry Points  
+  - 2.3 Service Area  
+- 3. Customer Journey Flow Diagram  
+  - 3.1 Flow Diagram Key Elements  
+- 4. Programs In Scope  
+  - 4.1 Program 1: Thrive@Work  
+  - 4.2 Program 2: Referrals – Light Touch (211 + Partner Network)  
+  - 4.3 Program 3: Utility Assistance  
+- 5. WebChat Flow Design  
+  - 5.1 How Stability360 Works (Client View)  
+  - 5.2 Flow Stages  
+  - 5.2.1 Multiple Category Selection  
+- 6. Routing Configuration  
+  - 6.1 Queue Structure  
+  - 6.2 Routing Profile  
+  - 6.3 Hours of Operation  
+  - 6.4 Context Preservation for Human Handoff  
+- 7. Agent Configuration  
+  - 7.1 User Roles  
+  - 7.2 Family Coach Role Definition  
+  - 7.3 Agent Status Codes  
+- 8. Agentic AI and Knowledge Base Configuration  
+  - 8.1 Agentic AI Assistant  
+  - 8.2 Knowledge Base as Source of Truth  
+  - 8.3 Knowledge Base Document Classes  
+  - 8.4 Client‑Facing vs Agent‑Facing Knowledge  
+  - 8.5 Language Guardrails  
+  - 8.6 Knowledge Base Sources  
+- 9. Role of 211 in Phase 0  
+  - 9.1 Future 211 Considerations  
+- 10. Case Management  
+  - 10.1 Amazon Connect Cases  
+  - 10.2 Knowledge Lake / Data Lake  
+  - 10.3 Charity Tracker Integration  
+  - 10.4 Closed‑Loop Referral Tracking  
+- 11. Client Identification and Recognition  
+- 12. Reporting  
+  - 12.1 Standard Amazon Connect Reports  
+  - 12.2 Data Export  
+  - 12.3 Future Dashboard Concept  
+- 13. Kiosk Web Interface  
+  - 13.1 Overview  
+  - 13.2 Requirements  
+- 14. Privacy and Data Considerations  
+- 15. Out of Scope  
+- 16. Acceptance Criteria  
+- Appendix A: Glossary of Terms  
+- Document Sign‑off  
+
+---
+
+## <span style="color:#B00020">Document History</span>
+| Version | Date       | Author             | Reviewer | Notes                |
+|:--:|:----------|:-------------------|:--------|:---------------------|
+| 1.0 | 02/03/2026 | Zackary Goncalves  | TUW Team | Initial Draft |
+| 2.0 | 02/04/2026 | Zackary Goncalves  | TUW Team | Added sc211 KB |
+| 2.1 | 02/09/2026 | Zackary Goncalves  | TUW Team | Feedback iteration |
+
+### Contact Information
+**Trident United Way**  
+- Ilze Astad — Chief Innovation Officer — iastad@tuw.org  
+- Natalie LaMonto — Data Analyst — nlamonto@tuw.org  
+
+**SoftwareOne**  
+- Sebastian Alvarez‑Vasquez — CX Solutions Architect — sebastian.alvarez‑vasquez@softwareone.com  
+- Tom Farquhar — Solutions Consultant — tom.farquhar@softwareone.com  
+- Jeffrey Goodro — Program Manager — Jeffrey.Goodro@softwareone.com  
+- Zackary Goncalves — Business Analyst — Zackary.Goncalves@softwareone.com  
+
+---
+
+## <span style="color:#0B5FFF">1. Executive Summary</span>
+Stability 360 is a coordinated access and support model designed to help individuals connect to the right resources more efficiently while preserving human capacity for cases that require deeper support. It brings together trusted community resources, technology, and real people to help clients find the right next step.  
+This Phase 0 Proof of Concept validates a client‑facing, automation‑first Agentic AI assistant that:  
+- Serves as a front door navigator for Stability 360  
+- Automates intake, screening, routing, and referrals  
+- Preserves human staff time for complex, high‑impact cases  
+- Enables closed‑loop referral tracking across systems  
+The prototype operates on three defined programs only: Thrive@Work, Referrals – Light Touch (211 + Partner Network), and Utility Assistance.  
+
+### 1.1 Phase 0 Success Criteria
+- End‑to‑end automated intake and routing for in‑scope programs  
+- Correct use of referral vs direct support paths  
+- Effective escalation to humans when required  
+- Closed‑loop referral tracking and follow‑up  
+- A clear, dignified client experience  
+
+---
+
+## <span style="color:#1E7F34">2. Platform Overview</span>
+### 2.1 Channels
+**In Scope:** WebChat — 24/7 AI bot with human escalation during business hours only.  
+**Out of Scope:** Voice, SMS (future consideration).  
+
+### 2.2 Entry Points
+- **TUW Website:** JavaScript widget on the Stability360 landing page  
+- **Physical Kiosk:** Touch‑screen devices providing the same web experience  
+
+### 2.3 Service Area
+Primary service area: Berkeley, Charleston, and Dorchester counties (SC). Thrive@Work extends eligibility based on employment at participating businesses.  
+
+---
+
+## <span style="color:#B00020">3. Customer Journey Flow Diagram</span>
+End‑to‑end flow from entry through referral/direct support resolution.  
+**Key Elements:**  
+- Green: Entry & session management  
+- Pink: Decision & routing logic  
+- Teal: Need categories  
+- Yellow: Data collection & processing  
+- Red: Human escalation triggers  
+
+---
+
+## <span style="color:#0B5FFF">4. Programs In Scope</span>
+### 4.1 Program 1: Thrive@Work
+- **Type:** Direct Support (primary) — may route to light‑touch referrals  
+- **Purpose:** Employer‑based access for confidential connection to services  
+- **Eligibility:** Employed at a participating business; determined during intake  
+- **Behavior:** Flags eligible clients and routes to direct support workflows; referrals when appropriate  
+- **Distinction:** Not an EAP; no employer notification/reporting  
+
+### 4.2 Program 2: Referrals – Light Touch (211 + Partner Network)
+- **Type:** Self‑Directed Referrals (Low Touch)  
+- **Purpose:** Provide community resource information; no case management  
+- **Behavior:** Uses sc211 scraped database + KB; supports follow‑up/escalation  
+- **Categories:** Housing, Transportation, Food, Health, Child Care, Legal Aid, Financial Literacy, Hygiene  
+- **Distinction:** Not guaranteed availability; client pursues services  
+
+### 4.3 Program 3: Utility Assistance
+- **Type:** Direct Support (High Touch)  
+- **Purpose:** Case‑managed support for utility‑related hardship  
+- **Behavior:** Extended intake, priority escalation, Charity Tracker case creation  
+- **Priority:** Imminent shutoff → immediate human review  
+- **Distinction:** Human‑led case management; not automated‑only  
+
+---
+
+## <span style="color:#1E7F34">5. WebChat Flow Design</span>
+### 5.1 How Stability360 Works (Client View)
+1) Start the conversation → brief questions.  
+2) Identify options → share resources or connect to specialist.  
+3) Get connected → some needs via referrals; others with specialist.  
+4) Follow‑up matters → check back and adjust.  
+
+### 5.2 Flow Stages
+**Stage 1 – Entry & Session Management:** New session (Contact ID), choose AI vs immediate human escalation, exit anytime.  
+**Stage 2 – Identification & Consent:** Collect name, zip, contact method & preference, availability, age, children <18, employment status, military service, public assistance; acknowledge data use; update Customer Profiles.  
+**Stage 3 – Need Assessment:** Categories/subcategories determine path (Utilities under Housing triggers Direct Support; most others Light Touch in Phase 0).  
+**Stage 4 – Referral vs Direct Support Determination:**  
+- **Referral Path (Light Touch):** Search SC211 KB by zip/need, match services, generate referral list, record in Knowledge Lake, offer follow‑up, escalate if needed.  
+- **Direct Support Path (High Touch):** Extended intake, screening, create Amazon Connect Case, route to Family Coach if available; otherwise schedule or next‑day; priority escalation for urgent; prep Charity Tracker payload.  
+
+### 5.2.1 Multiple Category Selection
+**Hybrid Support Path (Light + High Touch):** Deliver self‑directed referrals while initiating direct support and connecting to a Family Coach.  
+
+---
+
+## <span style="color:#B00020">6. Routing Configuration</span>
+### 6.1 Queue Structure
+**Stability 360 General (Chat):** All human escalations from WebChat AI bot.  
+
+### 6.2 Routing Profile
+**Stability 360 Case Worker (Chat):** 1 concurrent chat.  
+
+### 6.3 Hours of Operation
+- **AI Bot:** 24/7 (full self‑service including referrals)  
+- **Human Escalation:** Mon–Fri 08:30–20:30 EST; Sat 09:00–12:00 EST. After hours → schedule callback, trigger referrals, or create case for next‑day.  
+
+### 6.4 Context Preservation for Human Handoff
+Pass intake responses, identified needs, screening results, and conversation history to avoid repetition.  
+
+---
+
+## <span style="color:#0B5FFF">7. Agent Configuration</span>
+### 7.1 User Roles
+- **Family Coach (Case Worker):** Handle chat, view profiles, manage cases, access KB, view personal metrics.  
+- **Supervisor:** All above + manage status, view real‑time/historical metrics, manage users, configure hours.  
+
+### 7.2 Family Coach Role Definition
+Trained human specialist for Direct Support and escalations; provides case management and follow‑up; not a chatbot nor always‑on.  
+
+### 7.3 Agent Status Codes
+Available, Break, Lunch, Training, Meeting, Offline.  
+
+---
+
+## <span style="color:#1E7F34">8. Agentic AI and Knowledge Base Configuration</span>
+### 8.1 Agentic AI Assistant
+Client‑facing AI that can reason, take actions, follow rules, and escalate. Automates intake, routing, and referrals; does not make guarantees.  
+
+### 8.2 Knowledge Base as Source of Truth
+Class‑A‑derived rules/content govern recommendations, routing/escalation logic, language guardrails, and integration fields. Scope expansion requires KB update.  
+
+### 8.3 Knowledge Base Document Classes
+- **Class A (Authoritative / KB‑Eligible):** Programs, eligibility, intake logic, referral vs direct rules, escalation thresholds, language guardrails; includes sc211 web‑crawl output; versioned with content owner.  
+- **Class B (Reference / Human‑Only):** Internal policies, training manuals, SOPs, proposals; may inform Class A.  
+- **Class C (Informational/External):** Context only (partner sites, external PDFs, public web).  
+
+### 8.4 Client‑Facing vs Agent‑Facing Knowledge
+- **Client‑Facing KB:** Plain‑language content used by AI.  
+- **Agent‑Facing KB (Amazon Q in Connect):** Operational detail for Family Coaches; not exposed to clients.  
+
+### 8.5 Language Guardrails
+The assistant will **not** guarantee assistance/availability, make final eligibility determinations, provide professional advice, or introduce logic outside KB scope.  
+
+### 8.6 Knowledge Base Sources
+SC211 database via AWS Kendra (web‑scrape/index), TUW program docs in S3, income calculator guidelines, decision tree logic for three POC programs.  
+
+---
+
+## <span style="color:#B00020">9. Role of 211 in Phase 0</span>
+211 acts as the referral execution/service‑discovery layer (searchable by zip and need) with data extracted to S3. Not the front door, system of record, or routing decision‑maker. The AI and Knowledge Lake own intake, orchestration, persistence, and outcomes.  
+
+### 9.1 Future 211 Considerations
+Architecture to support multiple 211 databases beyond SC 211 in future phases.  
+
+---
+
+## <span style="color:#0B5FFF">10. Case Management</span>
+### 10.1 Amazon Connect Cases
+Standard case fields: Case ID, Client Name, Contact Info, Need Category, Program, Status, Assigned Worker, Priority Flag, Notes.  
+
+### 10.2 Knowledge Lake / Data Lake
+Central layer for intake data, referral records, outcomes, and history enabling closed‑loop tracking and reporting.  
+
+### 10.3 Charity Tracker Integration
+Stub JSON payload mapped to Charity Tracker API (POST /cases). Minimum: First/Last Name; additional demographics via Case Details.  
+
+### 10.4 Closed‑Loop Referral Tracking
+Track connection success and outcomes; automate follow‑ups for continuous improvement.  
+
+---
+
+## <span style="color:#1E7F34">11. Client Identification and Recognition</span>
+Use Amazon Connect Customer Profiles, multiple identifier matching (name + contact), and confirmation prompts. Low confidence → respectful confirmation before using prior context.  
+
+---
+
+## <span style="color:#B00020">12. Reporting</span>
+### 12.1 Standard Amazon Connect Reports
+Real‑time (queues, availability, active contacts), historical (volume, handle times, abandons), and contact search/transcripts.  
+
+### 12.2 Data Export
+Schedule standard reports to S3 (CSV). One Kinesis Data Stream for CTR. (Custom dashboards out of scope).  
+
+### 12.3 Future Dashboard Concept
+Future Stability 360 Dashboard vision (Learn/Earn/Keep/Grow) informs data capture; **not** in Phase 0 scope.  
+
+---
+
+## <span style="color:#0B5FFF">13. Kiosk Web Interface</span>
+### 13.1 Overview
+Browser‑based kiosk loads the same WebChat widget as main website.  
+
+### 13.2 Requirements
+- **Browser:** Modern (Chrome, Edge, Firefox) with JS enabled  
+- **Network:** Internet connectivity to AWS  
+- **Display:** Touch‑screen (≥10")  
+- **UX:** Same as website  
+*(Hardware procurement and physical setup out of scope.)*  
+
+---
+
+## <span style="color:#1E7F34">14. Privacy and Data Considerations</span>
+Collect only necessary info; share with purpose; use conversations to improve follow‑up/outcomes; no employer details for Thrive@Work users. Data used solely to improve coordination/follow‑up/outcomes; not for surveillance, eligibility enforcement, or punitive decisions; limited to what’s necessary.  
+
+---
+
+## <span style="color:#B00020">15. Out of Scope</span>
+Voice/SMS, payments, final eligibility determinations, full catalog coverage, advanced dashboards, production go‑live, sandbox creation, external integrations beyond stated, generative voice bots, custom reporting, third‑party configs, kiosk hardware, statewide expansion, email/live chat beyond defined entry points, custom CCP, Spanish (Phase 0 is English only).  
+
+---
+
+## <span style="color:#0B5FFF">16. Acceptance Criteria</span>
+- WebChat widget loads on TUW website & kiosk  
+- Bot completes intake & identifies need category  
+- Correct referral vs direct support decisions per KB  
+- SC211 inputs return relevant resources by need/location  
+- **Eligibility Screening:** Income calculator + intake (employment, military, children <18, age) determines program eligibility for direct support pathways  
+- Human escalation to Family Coach on request/requirement  
+- Context preserved for agents  
+- Amazon Connect Case created with fields populated  
+- Charity Tracker stub JSON matches API  
+- Closed‑loop referral outcomes tracked  
+- Data persists in Customer Profiles  
+- Client experience: clear, dignified, respectful, **not repetitive**  
+
+---
+
+## <span style="color:#1E7F34">Appendix A: Glossary of Terms</span>
+Key terms: Stability 360, Agentic AI Assistant, Family Coach, Knowledge Base, Knowledge Lake, Direct Assistance, Direct Support (High Touch), Referral – Light Touch, Thrive@Work, Intake, Screening, Routing, Escalation, Priority Escalation, Closed‑Loop Referral, Language Guardrails, 211, Charity Tracker, Phase 0.  
+
+---
+
+## <span style="color:#B00020">Document Sign‑off</span>
+By signing below, stakeholders acknowledge review and approval of this CX Design Document.  
+**Ilze Astad (TUW)** • **Natalie LaMonto (TUW)** • **SoftwareOne Representative**  

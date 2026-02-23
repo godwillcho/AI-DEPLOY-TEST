@@ -1,17 +1,14 @@
 """
-Stability360 Actions — Lambda Router
+Stability360 Actions -- Lambda Router
 
-Single Lambda function handling 5 MCP action tools:
-  1. POST /scoring/calculate      → scoring_calculator.handle_scoring
-  2. POST /charitytracker/submit  → charitytracker_payload.handle_charitytracker
-  3. POST /followup/schedule      → followup_scheduler.handle_followup
-  4. POST /customer/profile       → customer_profile.handle_customer_profile
-  5. POST /case/status            → case_status.handle_case_status
+Single Lambda function handling 2 MCP action tools:
+  1. POST /scoring/calculate   -> scoring_calculator.handle_scoring
+  2. POST /resources/search    -> sophia_resource_lookup.handle_resource_lookup
 
 Invocation patterns handled:
-  1. API Gateway          — event.body (JSON string), event.resource / event.path
-  2. AgentCore MCP        — event.toolName + event.arguments
-  3. Direct / test        — event.action + event.payload
+  1. API Gateway          -- event.body (JSON string), event.resource / event.path
+  2. AgentCore MCP        -- event.toolName + event.arguments
+  3. Direct / test        -- event.action + event.payload
 """
 
 import json
@@ -19,10 +16,6 @@ import logging
 import os
 
 from scoring_calculator import handle_scoring
-from charitytracker_payload import handle_charitytracker
-from followup_scheduler import handle_followup
-from customer_profile import handle_customer_profile
-from case_status import handle_case_status
 from sophia_resource_lookup import handle_resource_lookup
 
 # ---------------------------------------------------------------------------
@@ -33,7 +26,7 @@ LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'dev')
 
 # ---------------------------------------------------------------------------
-# Logger — structured JSON
+# Logger -- structured JSON
 # ---------------------------------------------------------------------------
 
 logger = logging.getLogger('actions_router')
@@ -66,33 +59,21 @@ logger.addHandler(_handler)
 # Route tables
 # ---------------------------------------------------------------------------
 
-# API Gateway path → handler
+# API Gateway path -> handler
 PATH_ROUTES = {
     '/scoring/calculate': handle_scoring,
-    '/charitytracker/submit': handle_charitytracker,
-    '/followup/schedule': handle_followup,
-    '/customer/profile': handle_customer_profile,
-    '/case/status': handle_case_status,
     '/resources/search': handle_resource_lookup,
 }
 
-# MCP operationId → handler (tool name after stripping target prefix)
+# MCP operationId -> handler (tool name after stripping target prefix)
 TOOL_ROUTES = {
     'scoringCalculate': handle_scoring,
-    'charityTrackerSubmit': handle_charitytracker,
-    'followupSchedule': handle_followup,
-    'customerProfileLookup': handle_customer_profile,
-    'caseStatusLookup': handle_case_status,
     'resourceLookup': handle_resource_lookup,
 }
 
-# Direct invocation action → handler
+# Direct invocation action -> handler
 ACTION_ROUTES = {
     'scoring': handle_scoring,
-    'charitytracker': handle_charitytracker,
-    'followup': handle_followup,
-    'customer_profile': handle_customer_profile,
-    'case_status': handle_case_status,
     'resource_lookup': handle_resource_lookup,
 }
 
@@ -104,7 +85,7 @@ ACTION_ROUTES = {
 def _extract_route_and_body(event):
     """Detect invocation format and extract (route_key, body_dict)."""
 
-    # 1. API Gateway — has httpMethod or resource
+    # 1. API Gateway -- has httpMethod or resource
     if 'httpMethod' in event or 'resource' in event:
         path = event.get('resource') or event.get('path', '')
         body = {}
@@ -112,7 +93,7 @@ def _extract_route_and_body(event):
             body = json.loads(event['body']) if isinstance(event['body'], str) else event['body']
         return 'path', path, body
 
-    # 2. AgentCore MCP — has toolName
+    # 2. AgentCore MCP -- has toolName
     if 'toolName' in event:
         tool_name = event['toolName']
         if '___' in tool_name:
@@ -122,7 +103,7 @@ def _extract_route_and_body(event):
             args = json.loads(args)
         return 'tool', tool_name, args
 
-    # 3. Direct invocation — has action field
+    # 3. Direct invocation -- has action field
     if 'action' in event:
         return 'action', event['action'], event.get('payload', event)
 
@@ -164,7 +145,7 @@ def _response(status_code, body):
 
 
 def handler(event, context):
-    """Main entry point — routes to the appropriate action module."""
+    """Main entry point -- routes to the appropriate action module."""
 
     request_id = (
         event.get('requestContext', {}).get('requestId')

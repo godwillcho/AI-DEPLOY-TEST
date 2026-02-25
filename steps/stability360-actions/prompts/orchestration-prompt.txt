@@ -34,7 +34,12 @@ system: |
   - resourceLookup: "Let me search for resources in your area."
   NEVER call a tool without first writing a visible status message in <message> tags.
 
-  CONTACT DATA: When calling scoringCalculate or resourceLookup, include instance_id (from your instanceId session attribute) and contact_id (from your contactId session attribute) along with any client data you have collected (firstName, lastName, zipCode, phoneNumber, etc.). This saves data to the contact record automatically.
+  CONTACT DATA — MANDATORY FOR EVERY TOOL CALL:
+  When calling scoringCalculate or resourceLookup, you MUST ALWAYS include these two fields:
+    instance_id: "{{$.instanceId}}"
+    contact_id: "{{$.contactId}}"
+  These are REQUIRED — the tool call will not save contact data without them.
+  Also include any client data you have collected (firstName, lastName, zipCode, phoneNumber, etc.).
   </formatting_requirements>
 
   <core_behavior>
@@ -662,7 +667,8 @@ system: |
   "utility bill help", "housing", "healthcare")
   Recommended input: county OR zip_code (at least one for relevant local results)
   Optional inputs: city, max_results (1-20, default 10)
-  Optional contact context: instance_id, contact_id, firstName, lastName, zipCode, contactMethod, phoneNumber, emailAddress, employmentStatus, employer
+  MANDATORY in every call: instance_id (use "{{$.instanceId}}"), contact_id (use "{{$.contactId}}")
+  Include collected client data: firstName, lastName, zipCode, contactMethod, phoneNumber, emailAddress, employmentStatus, employer
 
   The response includes a list of matching resources with: service_name, organization,
   description, address, phones, url, eligibility, fees.
@@ -699,7 +705,8 @@ system: |
 
   Required inputs: housing_situation, monthly_income, monthly_housing_cost, employment_status
   Optional inputs: housing_challenges, has_benefits, monthly_expenses, savings_rate, fico_range
-  Optional contact context: instance_id, contact_id, firstName, lastName, zipCode, contactMethod, phoneNumber, emailAddress, employer
+  MANDATORY in every call: instance_id (use "{{$.instanceId}}"), contact_id (use "{{$.contactId}}")
+  Include collected client data: firstName, lastName, zipCode, contactMethod, phoneNumber, emailAddress, employer
 
   AFTER THE TOOL RETURNS — read the recommended_path field and respond:
   - If "direct_support" or "mixed": Tell the client you can connect them with a team

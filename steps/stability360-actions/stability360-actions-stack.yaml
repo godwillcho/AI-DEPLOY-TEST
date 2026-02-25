@@ -256,6 +256,14 @@ Resources:
                 Resource:
                   - !GetAtt ActionsTable.Arn
                   - !Sub '${ActionsTable.Arn}/index/*'
+        - PolicyName: ConnectContactAttributes
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - connect:UpdateContactAttributes
+                Resource: !Sub 'arn:aws:connect:${AWS::Region}:${AWS::AccountId}:instance/*/contact/*'
         - PolicyName: XRayAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -288,6 +296,7 @@ Resources:
       Environment:
         Variables:
           ACTIONS_TABLE_NAME: !Ref ActionsTable
+          CONNECT_INSTANCE_ID: !Ref ConnectInstanceId
           ENVIRONMENT: !Ref Environment
           LOG_LEVEL: INFO
           SOPHIA_API_URL: 'https://api-prod-0.sophia-app.com/api/services/search/keyword-search'

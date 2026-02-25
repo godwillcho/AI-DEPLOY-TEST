@@ -5,6 +5,11 @@ Single Lambda function handling 2 MCP action tools:
   1. POST /scoring/calculate   -> scoring_calculator.handle_scoring
   2. POST /resources/search    -> sophia_resource_lookup.handle_resource_lookup
 
+Contact attribute persistence is handled automatically: when any tool call
+includes instance_id + contact_id, recognized session attributes in the
+request body are saved as Amazon Connect contact attributes after the
+primary handler completes.
+
 Invocation patterns handled:
   1. API Gateway          -- event.body (JSON string), event.resource / event.path
   2. AgentCore MCP        -- event.toolName + event.arguments
@@ -14,6 +19,10 @@ Invocation patterns handled:
 import json
 import logging
 import os
+import re
+
+import boto3
+from botocore.exceptions import ClientError
 
 from scoring_calculator import handle_scoring
 from sophia_resource_lookup import handle_resource_lookup
@@ -54,6 +63,114 @@ for h in logger.handlers[:]:
 _handler = logging.StreamHandler()
 _handler.setFormatter(StructuredFormatter())
 logger.addHandler(_handler)
+
+# ---------------------------------------------------------------------------
+# Contact attribute persistence (router-level middleware)
+# ---------------------------------------------------------------------------
+
+CONNECT_INSTANCE_ID = os.environ.get('CONNECT_INSTANCE_ID', '')
+CONNECT_REGION = os.environ.get('CONNECT_REGION', os.environ.get('AWS_REGION', 'us-west-2'))
+
+UUID_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    re.IGNORECASE,
+)
+
+# Session attribute keys recognized for contact attribute persistence.
+# Maps request body keys to Connect contact attribute names.
+ATTR_MAP = {
+    # Core intake
+    'firstName': 'firstName', 'lastName': 'lastName',
+    'zipCode': 'zipCode', 'zip_code': 'zipCode',
+    'county': 'county', 'contactMethod': 'contactMethod',
+    'phoneNumber': 'phoneNumber', 'emailAddress': 'emailAddress',
+    'preferredDays': 'preferredDays', 'preferredTimes': 'preferredTimes',
+    # Need
+    'needCategory': 'needCategory', 'keyword': 'needCategory',
+    'needSubcategory': 'needSubcategory', 'path': 'path',
+    # Demographics
+    'age': 'age', 'hasChildrenUnder18': 'hasChildrenUnder18',
+    'employmentStatus': 'employmentStatus', 'employment_status': 'employmentStatus',
+    'employer': 'employer',
+    'militaryAffiliation': 'militaryAffiliation',
+    'publicAssistance': 'publicAssistance',
+    # Scoring inputs
+    'housing_situation': 'housingSituation', 'housingSituation': 'housingSituation',
+    'monthly_income': 'monthlyIncome', 'monthlyIncome': 'monthlyIncome',
+    'monthly_housing_cost': 'monthlyHousingCost', 'monthlyHousingCost': 'monthlyHousingCost',
+    'monthly_expenses': 'monthlyExpenses', 'monthlyExpenses': 'monthlyExpenses',
+    'savings_rate': 'savingsRate', 'savingsRate': 'savingsRate',
+    'fico_range': 'ficoRange', 'ficoRange': 'ficoRange',
+    'has_benefits': 'hasBenefits', 'hasBenefits': 'hasBenefits',
+    # Partner
+    'partnerEmployee': 'partnerEmployee', 'partnerEmployer': 'partnerEmployer',
+    # Routing
+    'escalationRoute': 'escalationRoute',
+}
+
+
+def _save_contact_attributes(body, result, request_id):
+    """Persist recognized session attributes as Connect contact attributes.
+
+    Called automatically after every successful tool handler.  Requires
+    either instance_id in body or CONNECT_INSTANCE_ID env var, plus
+    contact_id in body.  Silently skips if either is missing.
+    """
+    instance_id = (body.get('instance_id') or CONNECT_INSTANCE_ID).strip()
+    contact_id = (body.get('contact_id') or '').strip()
+
+    if not instance_id or not UUID_RE.match(instance_id):
+        return
+    if not contact_id or not UUID_RE.match(contact_id):
+        return
+
+    # Collect attributes from request body
+    attributes = {}
+    for body_key, attr_name in ATTR_MAP.items():
+        value = body.get(body_key)
+        if value is not None and str(value).strip():
+            attributes[attr_name] = str(value).strip()
+
+    # Collect scoring results from handler output
+    score_fields = {
+        'housing_score': 'housingScore',
+        'employment_score': 'employmentScore',
+        'financial_resilience_score': 'financialResilienceScore',
+        'composite_score': 'compositeScore',
+        'priority_flag': 'priorityFlag',
+        'recommended_path': 'recommendedPath',
+    }
+    for result_key, attr_name in score_fields.items():
+        value = result.get(result_key)
+        if value is not None:
+            attributes[attr_name] = str(value).strip()
+
+    if not attributes:
+        return
+
+    try:
+        connect_client = boto3.client('connect', region_name=CONNECT_REGION)
+        connect_client.update_contact_attributes(
+            InstanceId=instance_id,
+            InitialContactId=contact_id,
+            Attributes=attributes,
+        )
+        logger.info(
+            'Saved %d contact attributes',
+            len(attributes),
+            extra={'extra': {
+                'requestId': request_id,
+                'contactId': contact_id,
+                'attributes': list(attributes.keys()),
+            }},
+        )
+    except ClientError as exc:
+        logger.warning(
+            'Failed to save contact attributes: %s',
+            exc,
+            extra={'extra': {'requestId': request_id, 'contactId': contact_id}},
+        )
+
 
 # ---------------------------------------------------------------------------
 # Route tables
@@ -179,6 +296,9 @@ def handler(event, context):
 
     try:
         result = handler_fn(body)
+
+        # Auto-save contact attributes after every successful tool call
+        _save_contact_attributes(body, result, request_id)
 
         # Propagate session attributes if present in the tool response
         session_attrs = result.pop('sessionAttributes', None)

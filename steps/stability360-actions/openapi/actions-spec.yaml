@@ -108,6 +108,42 @@ paths:
                     - "740-799"
                     - "800+"
                     - unknown
+                instance_id:
+                  type: string
+                  description: "Connect instance ID from instanceId session attribute"
+                contact_id:
+                  type: string
+                  description: "Contact ID from contactId session attribute"
+                firstName:
+                  type: string
+                  description: "Client first name if collected"
+                lastName:
+                  type: string
+                  description: "Client last name if collected"
+                zipCode:
+                  type: string
+                  description: "Client ZIP code if collected"
+                contactMethod:
+                  type: string
+                  description: "Preferred contact method if collected"
+                phoneNumber:
+                  type: string
+                  description: "Client phone number if collected"
+                emailAddress:
+                  type: string
+                  description: "Client email if collected"
+                employer:
+                  type: string
+                  description: "Employer name if collected"
+                needCategory:
+                  type: string
+                  description: "Primary need category"
+                path:
+                  type: string
+                  description: "Intake path (referral or direct_support)"
+                escalationRoute:
+                  type: string
+                  description: "Routing decision"
       responses:
         "200":
           description: "Scoring results"
@@ -189,6 +225,48 @@ paths:
                   minimum: 1
                   maximum: 20
                   default: 10
+                instance_id:
+                  type: string
+                  description: "Connect instance ID from instanceId session attribute"
+                contact_id:
+                  type: string
+                  description: "Contact ID from contactId session attribute"
+                firstName:
+                  type: string
+                  description: "Client first name if collected"
+                lastName:
+                  type: string
+                  description: "Client last name if collected"
+                zipCode:
+                  type: string
+                  description: "Client ZIP code if collected"
+                contactMethod:
+                  type: string
+                  description: "Preferred contact method if collected"
+                phoneNumber:
+                  type: string
+                  description: "Client phone number if collected"
+                emailAddress:
+                  type: string
+                  description: "Client email if collected"
+                employmentStatus:
+                  type: string
+                  description: "Employment status if collected"
+                employer:
+                  type: string
+                  description: "Employer name if collected"
+                needCategory:
+                  type: string
+                  description: "Primary need category"
+                needSubcategory:
+                  type: string
+                  description: "Need subcategory"
+                path:
+                  type: string
+                  description: "Intake path (referral or direct_support)"
+                escalationRoute:
+                  type: string
+                  description: "Routing decision"
       responses:
         "200":
           description: "Resource search results"

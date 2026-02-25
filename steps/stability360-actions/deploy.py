@@ -64,7 +64,7 @@ POLL_INTERVAL = 10
 
 OPENAPI_S3_KEY = 'openapi/actions-spec.yaml'
 
-# 2 MCP tool operation IDs (from OpenAPI spec) — Phase 0: scoring + resource lookup only
+# 2 MCP tool operation IDs (from OpenAPI spec)
 MCP_TOOL_OPERATIONS = ['scoringCalculate', 'resourceLookup']
 
 ORCHESTRATION_PROMPT_MODEL = 'us.anthropic.claude-sonnet-4-5-20250929-v1:0'
@@ -126,6 +126,7 @@ RESOURCE_LOOKUP_TOOL_INSTRUCTION = (
     'eligibility, and fees.'
 )
 
+
 # ---------------------------------------------------------------------------
 # Resource names — derived from stack name
 # ---------------------------------------------------------------------------
@@ -134,8 +135,8 @@ API_KEY_CREDENTIAL_NAME = None
 MCP_TARGET_NAME = None
 AI_AGENT_NAME = None
 AI_AGENT_DESCRIPTION = None
-MCP_TOOL_NAMES = None          # list of 2 tool names
-MCP_TOOL_NAMES_SAFE = None     # list of 2 tool names (hyphens replaced)
+MCP_TOOL_NAMES = None          # list of tool names
+MCP_TOOL_NAMES_SAFE = None     # list of tool names (hyphens replaced)
 ORCHESTRATION_PROMPT_NAME = None
 SECURITY_PROFILE_NAME = None
 
@@ -152,8 +153,8 @@ def init_resource_names(stack_name):
 
     AI_AGENT_NAME = f'{stack_name}-orchestration'
     AI_AGENT_DESCRIPTION = (
-        f'AI agent for {stack_name} — Scoring Calculator + Resource Lookup '
-        '(Phase 0: 2 MCP tools)'
+        f'AI agent for {stack_name} — Scoring, Resource Lookup, Contact Data '
+        f'({len(MCP_TOOL_OPERATIONS)} MCP tools)'
     )
 
     # Tool name format: {target-name}___{operationId}
@@ -1025,13 +1026,18 @@ def _build_agent_tool_configurations(gateway_id, assistant_id=None,
             'instruction': {
                 'instruction': (
                     'Mark the conversation as complete ONLY after confirming '
-                    'the customer has no additional questions or needs.'
+                    'the customer has no additional questions or needs. Always '
+                    'ask if there is anything else you can help with before '
+                    'using this tool.'
                 ),
             },
             'inputSchema': {
                 'type': 'object',
                 'properties': {
-                    'reason': {'type': 'string', 'description': 'Reason of completion'},
+                    'reason': {
+                        'type': 'string',
+                        'description': 'Reason of completion',
+                    },
                 },
                 'required': ['reason'],
             },
@@ -1039,17 +1045,22 @@ def _build_agent_tool_configurations(gateway_id, assistant_id=None,
         {
             'toolName': 'Escalate',
             'toolType': 'RETURN_TO_CONTROL',
-            'description': 'Escalate to human agent when AI cannot resolve',
+            'description': 'Escalate to human agent when the issue cannot be resolved by AI',
             'instruction': {
                 'instruction': (
-                    'Escalate when the customer requests it, when you cannot '
-                    'resolve their issue, or when a safety concern arises.'
+                    'Escalate the conversation to a human agent when the '
+                    'customer explicitly requests it, when you cannot resolve '
+                    'their issue, or when the situation requires human judgment. '
+                    'Always inform the customer that you are transferring them.'
                 ),
             },
             'inputSchema': {
                 'type': 'object',
                 'properties': {
-                    'reason': {'type': 'string', 'description': 'Reason for escalation'},
+                    'reason': {
+                        'type': 'string',
+                        'description': 'Reason for escalation',
+                    },
                 },
                 'required': ['reason'],
             },
@@ -1057,7 +1068,7 @@ def _build_agent_tool_configurations(gateway_id, assistant_id=None,
         retrieve_tool,
     ]
 
-    # Add MCP action tools (Phase 0: scoring + resource lookup only)
+    # Add MCP action tools
     tool_instructions = {
         'scoringCalculate': SCORING_TOOL_INSTRUCTION,
         'resourceLookup': RESOURCE_LOOKUP_TOOL_INSTRUCTION,

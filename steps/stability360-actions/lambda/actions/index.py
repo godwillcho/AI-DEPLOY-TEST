@@ -116,12 +116,29 @@ def _save_contact_attributes(body, result, request_id):
     either instance_id in body or CONNECT_INSTANCE_ID env var, plus
     contact_id in body.  Silently skips if either is missing.
     """
-    instance_id = (body.get('instance_id') or CONNECT_INSTANCE_ID).strip()
-    contact_id = (body.get('contact_id') or '').strip()
+    raw_instance = body.get('instance_id') or CONNECT_INSTANCE_ID
+    raw_contact = body.get('contact_id') or ''
+    instance_id = raw_instance.strip() if raw_instance else ''
+    contact_id = raw_contact.strip() if raw_contact else ''
+
+    logger.info(
+        'Contact attribute check — instance_id=%s, contact_id=%s, env_fallback=%s',
+        body.get('instance_id', '<not in body>'),
+        body.get('contact_id', '<not in body>'),
+        CONNECT_INSTANCE_ID or '<not set>',
+    )
 
     if not instance_id or not UUID_RE.match(instance_id):
+        logger.warning(
+            'Skipping contact attributes — invalid instance_id: %r',
+            instance_id,
+        )
         return
     if not contact_id or not UUID_RE.match(contact_id):
+        logger.warning(
+            'Skipping contact attributes — invalid contact_id: %r',
+            contact_id,
+        )
         return
 
     # Collect attributes from request body
@@ -146,7 +163,13 @@ def _save_contact_attributes(body, result, request_id):
             attributes[attr_name] = str(value).strip()
 
     if not attributes:
+        logger.info('No attributes to save for request %s', request_id)
         return
+
+    logger.info(
+        'Saving %d contact attributes for contact %s: %s',
+        len(attributes), contact_id, list(attributes.keys()),
+    )
 
     try:
         connect_client = boto3.client('connect', region_name=CONNECT_REGION)
@@ -282,6 +305,7 @@ def handler(event, context):
             'requestId': request_id,
             'routeType': route_type,
             'routeKey': route_key,
+            'bodyKeys': list(body.keys()) if isinstance(body, dict) else 'N/A',
         }},
     )
 

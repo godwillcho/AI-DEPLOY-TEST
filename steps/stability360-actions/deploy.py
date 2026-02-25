@@ -1408,15 +1408,10 @@ def main():
         # Jump to MCP steps (5-7) + Connect steps (8-13)
         agentcore_client = session.client('bedrock-agentcore-control')
         logger.info('')
-        logger.info('--- Step 5: OpenAPI spec ---')
-        openapi_s3_location = outputs.get('OpenApiSpecS3Location', '')
-        if openapi_s3_location:
-            logger.info('OpenAPI spec from CFN: %s', openapi_s3_location)
-            openapi_uri = openapi_s3_location
-        else:
-            s3_client = session.client('s3')
-            openapi_uri = upload_openapi_spec(s3_client, spec_bucket, api_url)
-            logger.info('OpenAPI URI: %s', openapi_uri)
+        logger.info('--- Step 5: OpenAPI spec (always re-upload from local) ---')
+        s3_client = session.client('s3')
+        openapi_uri = upload_openapi_spec(s3_client, spec_bucket, api_url)
+        logger.info('OpenAPI URI: %s', openapi_uri)
         logger.info('')
         logger.info('--- Step 6: Register API key credential ---')
         api_key_value = outputs.get('ApiKeyValue', '')

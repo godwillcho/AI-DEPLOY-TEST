@@ -1,0 +1,15 @@
+{
+    "timestamp": "2026-02-25 16:20:42,746",
+    "level": "INFO",
+    "message": "Contact attribute check — instance_id=<not in body>, contact_id=<not in body>, env_fallback=110e2f11-ec6e-44b9-83cb-32dac6722467",
+    "logger": "actions_router",
+    "environment": "dev"
+}
+
+{
+    "timestamp": "2026-02-25T16:20:42Z",
+    "level": "WARNING",
+    "message": "Skipping contact attributes — invalid contact_id: ''",
+    "logger": "actions_router",
+    "requestId": "e59c2a51-3c2a-4728-b469-17901334fd1b"
+}

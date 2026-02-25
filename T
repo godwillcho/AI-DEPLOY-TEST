@@ -1,7 +1,191 @@
+	
+No older events at this moment. 
+Retry
+2026-02-25T17:04:14.526Z
 {
-    "timestamp": "2026-02-25T16:31:54Z",
+    "time": "2026-02-25T17:04:14.526Z",
+    "type": "platform.initStart",
+    "record": {
+        "initializationType": "on-demand",
+        "phase": "init",
+        "runtimeVersion": "python:3.13.mainlinev2.v3",
+        "runtimeVersionArn": "arn:aws:lambda:us-east-1::runtime:b0f2d40716005f99e1e65ab9c4ba4749be69e8c44df93eecbb62a1fff12bd80f",
+        "functionName": "stability360-actions-dev-actions",
+        "functionVersion": "$LATEST",
+        "instanceId": "2026/02/25/stability360-actions-dev-actions[$LATEST]d901575e4995434288d5df2879acb449",
+        "instanceMaxMemory": 268435456
+    }
+}
+
+{"time":"2026-02-25T17:04:14.526Z","type":"platform.initStart","record":{"initializationType":"on-demand","phase":"init","runtimeVersion":"python:3.13.mainlinev2.v3","runtimeVersionArn":"arn:aws:lambda:us-east-1::runtime:b0f2d40716005f99e1e65ab9c4ba4749be69e8c44df93eecbb62a1fff12bd80f","functionName":"stability360-actions-dev-actions","functionVersion":"$LATEST","instanceId":"2026/02/25/stability360-actions-dev-actions[$LATEST]d901575e4995434288d5df2879acb449","instanceMaxMemory":268435456}}
+2026-02-25T17:04:14.886Z
+{
+    "time": "2026-02-25T17:04:14.886Z",
+    "type": "platform.start",
+    "record": {
+        "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741",
+        "functionArn": "arn:aws:lambda:us-east-1:125677696735:function:stability360-actions-dev-actions",
+        "version": "$LATEST",
+        "tracing": {
+            "spanId": "3369cc27570ab0e0",
+            "type": "X-Amzn-Trace-Id",
+            "value": "Root=1-699f2b8e-75ad6fe066a3bc0a23a8bcce;Parent=4bffbcee9ce29708;Sampled=1;Lineage=1:395010b8:0"
+        }
+    }
+}
+
+{"time":"2026-02-25T17:04:14.886Z","type":"platform.start","record":{"requestId":"dc8d159b-0bae-4c89-99a4-52287c081741","functionArn":"arn:aws:lambda:us-east-1:125677696735:function:stability360-actions-dev-actions","version":"$LATEST","tracing":{"spanId":"3369cc27570ab0e0","type":"X-Amzn-Trace-Id","value":"Root=1-699f2b8e-75ad6fe066a3bc0a23a8bcce;Parent=4bffbcee9ce29708;Sampled=1;Lineage=1:395010b8:0"}}}
+2026-02-25T17:04:14.886Z
+{
+    "timestamp": "2026-02-25 17:04:14,886",
+    "level": "INFO",
+    "message": "Request received",
+    "logger": "actions_router",
+    "environment": "dev",
+    "requestId": "89ac64c8-d835-473a-a59f-4093cffc0d91"
+}
+
+
+{"timestamp": "2026-02-25 17:04:14,886", "level": "INFO", "message": "Request received", "logger": "actions_router", "environment": "dev", "requestId": "89ac64c8-d835-473a-a59f-4093cffc0d91"}
+2026-02-25T17:04:14.886Z
+{
+    "timestamp": "2026-02-25T17:04:14Z",
+    "level": "INFO",
+    "message": "Request received",
+    "logger": "actions_router",
+    "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741",
+    "extra": {
+        "requestId": "89ac64c8-d835-473a-a59f-4093cffc0d91"
+    }
+}
+
+
+{"timestamp": "2026-02-25T17:04:14Z", "level": "INFO", "message": "Request received", "logger": "actions_router", "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741", "extra": {"requestId": "89ac64c8-d835-473a-a59f-4093cffc0d91"}}
+2026-02-25T17:04:14.887Z
+{
+    "timestamp": "2026-02-25 17:04:14,887",
+    "level": "INFO",
+    "message": "Routing request",
+    "logger": "actions_router",
+    "environment": "dev",
+    "requestId": "89ac64c8-d835-473a-a59f-4093cffc0d91",
+    "routeType": "path",
+    "routeKey": "/resources/search",
+    "bodyKeys": [
+        "county",
+        "max_results",
+        "keyword",
+        "zip_code"
+    ]
+}
+
+
+{"timestamp": "2026-02-25 17:04:14,887", "level": "INFO", "message": "Routing request", "logger": "actions_router", "environment": "dev", "requestId": "89ac64c8-d835-473a-a59f-4093cffc0d91", "routeType": "path", "routeKey": "/resources/search", "bodyKeys": ["county", "max_results", "keyword", "zip_code"]}
+2026-02-25T17:04:14.887Z
+{
+    "timestamp": "2026-02-25T17:04:14Z",
+    "level": "INFO",
+    "message": "Routing request",
+    "logger": "actions_router",
+    "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741",
+    "extra": {
+        "requestId": "89ac64c8-d835-473a-a59f-4093cffc0d91",
+        "routeType": "path",
+        "routeKey": "/resources/search",
+        "bodyKeys": [
+            "county",
+            "max_results",
+            "keyword",
+            "zip_code"
+        ]
+    }
+}
+
+
+{"timestamp": "2026-02-25T17:04:14Z", "level": "INFO", "message": "Routing request", "logger": "actions_router", "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741", "extra": {"requestId": "89ac64c8-d835-473a-a59f-4093cffc0d91", "routeType": "path", "routeKey": "/resources/search", "bodyKeys": ["county", "max_results", "keyword", "zip_code"]}}
+2026-02-25T17:04:14.887Z
+{
+    "timestamp": "2026-02-25T17:04:14Z",
+    "level": "INFO",
+    "message": "Resource lookup: keyword=food pantry, county=Charleston, city=, zip=29401",
+    "logger": "sophia_resource_lookup",
+    "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741"
+}
+
+
+{"timestamp": "2026-02-25T17:04:14Z", "level": "INFO", "message": "Resource lookup: keyword=food pantry, county=Charleston, city=, zip=29401", "logger": "sophia_resource_lookup", "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741"}
+2026-02-25T17:04:18.016Z
+{
+    "timestamp": "2026-02-25T17:04:18Z",
+    "level": "INFO",
+    "message": "Found 369 results (showing 10) for: food pantry in Charleston",
+    "logger": "sophia_resource_lookup",
+    "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741"
+}
+
+
+{"timestamp": "2026-02-25T17:04:18Z", "level": "INFO", "message": "Found 369 results (showing 10) for: food pantry in Charleston", "logger": "sophia_resource_lookup", "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741"}
+2026-02-25T17:04:18.094Z
+{
+    "timestamp": "2026-02-25 17:04:18,094",
+    "level": "INFO",
+    "message": "Contact attribute check — instance_id=<not in body>, contact_id=<not in body>, env_fallback=110e2f11-ec6e-44b9-83cb-32dac6722467",
+    "logger": "actions_router",
+    "environment": "dev"
+}
+
+
+{"timestamp": "2026-02-25 17:04:18,094", "level": "INFO", "message": "Contact attribute check \u2014 instance_id=<not in body>, contact_id=<not in body>, env_fallback=110e2f11-ec6e-44b9-83cb-32dac6722467", "logger": "actions_router", "environment": "dev"}
+2026-02-25T17:04:18.094Z
+{
+    "timestamp": "2026-02-25T17:04:18Z",
+    "level": "INFO",
+    "message": "Contact attribute check — instance_id=<not in body>, contact_id=<not in body>, env_fallback=110e2f11-ec6e-44b9-83cb-32dac6722467",
+    "logger": "actions_router",
+    "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741"
+}
+
+
+{"timestamp": "2026-02-25T17:04:18Z", "level": "INFO", "message": "Contact attribute check — instance_id=<not in body>, contact_id=<not in body>, env_fallback=110e2f11-ec6e-44b9-83cb-32dac6722467", "logger": "actions_router", "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741"}
+2026-02-25T17:04:18.095Z
+{
+    "timestamp": "2026-02-25 17:04:18,095",
     "level": "WARNING",
     "message": "Skipping contact attributes — invalid contact_id: ''",
     "logger": "actions_router",
-    "requestId": "6be6f02d-3148-47f7-9506-d27069724034"
+    "environment": "dev"
 }
+
+
+{"timestamp": "2026-02-25 17:04:18,095", "level": "WARNING", "message": "Skipping contact attributes \u2014 invalid contact_id: ''", "logger": "actions_router", "environment": "dev"}
+2026-02-25T17:04:18.095Z
+{
+    "timestamp": "2026-02-25T17:04:18Z",
+    "level": "WARNING",
+    "message": "Skipping contact attributes — invalid contact_id: ''",
+    "logger": "actions_router",
+    "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741"
+}
+
+
+{"timestamp": "2026-02-25T17:04:18Z", "level": "WARNING", "message": "Skipping contact attributes — invalid contact_id: ''", "logger": "actions_router", "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741"}
+2026-02-25T17:04:18.114Z
+{
+    "time": "2026-02-25T17:04:18.114Z",
+    "type": "platform.report",
+    "record": {
+        "requestId": "dc8d159b-0bae-4c89-99a4-52287c081741",
+        "metrics": {
+            "durationMs": 3228.273,
+            "billedDurationMs": 3585,
+            "memorySizeMB": 256,
+            "maxMemoryUsedMB": 108,
+            "initDurationMs": 356.041
+        },
+        "tracing": {
+            "spanId": "3369cc27570ab0e0",
+            "type": "X-Amzn-Trace-Id",
+            "value": "Root=1-699f2b8e-75ad6fe066a3bc0a23a8bcce;Parent=4bffbcee9ce29708;Sampled=1;Lineage=1:395010b8:0"
+        },
+        "status": "success"
+    }

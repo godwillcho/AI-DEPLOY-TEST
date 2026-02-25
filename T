@@ -1,15 +1,13 @@
-{
-    "timestamp": "2026-02-25 16:20:42,746",
-    "level": "INFO",
-    "message": "Contact attribute check — instance_id=<not in body>, contact_id=<not in body>, env_fallback=110e2f11-ec6e-44b9-83cb-32dac6722467",
-    "logger": "actions_router",
-    "environment": "dev"
-}
-
-{
-    "timestamp": "2026-02-25T16:20:42Z",
-    "level": "WARNING",
-    "message": "Skipping contact attributes — invalid contact_id: ''",
-    "logger": "actions_router",
-    "requestId": "e59c2a51-3c2a-4728-b469-17901334fd1b"
-}
+$ python deploy.py --update-prompt --connect-instance-id 110e2f11-ec6e-44b9-83cb-32dac6722467 --region us-east-1
+10:27:44 [INFO] ============================================================
+10:27:44 [INFO] Stability360 Actions — Deployment
+10:27:44 [INFO] ============================================================
+10:27:44 [INFO] Stack name:    stability360-actions
+10:27:44 [INFO] Region:        us-east-1
+10:27:44 [INFO] Environment:   dev
+10:27:46 [INFO] Found Q Connect assistant: e14b72eb-2d84-439a-a3d7-53089174c7fb
+10:27:46 [INFO] Prompt content loaded (53227 chars) from C:\Users\godwill.cho\OneDrive - SoftwareOne\Desktop\TRIDENT_UNITED_WAY_CDK\STABILITY360 APP\AI-DEPLOY-TEST\steps\stability360-actions\prompts\orchestration-prompt.txt
+10:27:47 [INFO] Creating orchestration prompt: stability360-actions-orchestration
+10:27:47 [INFO]   Type: ORCHESTRATION, Model: us.anthropic.claude-sonnet-4-5-20250929-v1:0, Format: MESSAGES
+10:27:47 [WARNING] Could not create prompt: An error occurred (ValidationException) when calling the CreateAIPrompt operation: Each variable may only appear once.
+10:27:47 [INFO] Prompt updated: None

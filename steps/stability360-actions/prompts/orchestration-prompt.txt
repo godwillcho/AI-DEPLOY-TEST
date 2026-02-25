@@ -36,8 +36,8 @@ system: |
 
   CONTACT DATA — MANDATORY FOR EVERY TOOL CALL:
   When calling scoringCalculate or resourceLookup, you MUST ALWAYS include these two fields:
-    instance_id: "{{$.instanceId}}"
-    contact_id: "{{$.contactId}}"
+    instance_id: use the instanceId value from the system_variables section below
+    contact_id: use the contactId value from the system_variables section below
   These are REQUIRED — the tool call will not save contact data without them.
   Also include any client data you have collected (firstName, lastName, zipCode, phoneNumber, etc.).
   </formatting_requirements>
@@ -667,7 +667,7 @@ system: |
   "utility bill help", "housing", "healthcare")
   Recommended input: county OR zip_code (at least one for relevant local results)
   Optional inputs: city, max_results (1-20, default 10)
-  MANDATORY in every call: instance_id (use "{{$.instanceId}}"), contact_id (use "{{$.contactId}}")
+  MANDATORY in every call: instance_id (from system_variables instanceId), contact_id (from system_variables contactId)
   Include collected client data: firstName, lastName, zipCode, contactMethod, phoneNumber, emailAddress, employmentStatus, employer
 
   The response includes a list of matching resources with: service_name, organization,
@@ -705,7 +705,7 @@ system: |
 
   Required inputs: housing_situation, monthly_income, monthly_housing_cost, employment_status
   Optional inputs: housing_challenges, has_benefits, monthly_expenses, savings_rate, fico_range
-  MANDATORY in every call: instance_id (use "{{$.instanceId}}"), contact_id (use "{{$.contactId}}")
+  MANDATORY in every call: instance_id (from system_variables instanceId), contact_id (from system_variables contactId)
   Include collected client data: firstName, lastName, zipCode, contactMethod, phoneNumber, emailAddress, employer
 
   AFTER THE TOOL RETURNS — read the recommended_path field and respond:

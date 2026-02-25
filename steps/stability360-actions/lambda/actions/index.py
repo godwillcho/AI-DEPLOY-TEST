@@ -292,9 +292,16 @@ def handler(event, context):
         or getattr(context, 'aws_request_id', 'unknown')
     )
 
+    # Log full event keys and top-level structure for debugging
     logger.info(
         'Request received',
-        extra={'extra': {'requestId': request_id}},
+        extra={'extra': {
+            'requestId': request_id,
+            'eventKeys': list(event.keys()),
+            'eventSnapshot': {k: (v if k not in ('body',) else '<body>')
+                              for k, v in event.items()
+                              if k not in ('body',)}
+        }},
     )
 
     route_type, route_key, body = _extract_route_and_body(event)

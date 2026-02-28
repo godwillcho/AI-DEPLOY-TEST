@@ -31,12 +31,12 @@ User: What is Stability360?
 
 ---
 
-## 2. Referral Path [R] — Light Touch (Consent + Condensed Intake + resourceLookup)
+## 2. Referral Path [R] — Light Touch (Consent + Condensed Intake + Follow-up + resourceLookup)
 
 **Description:** Client says they NEED HELP with an [R] category. Aria must:
-consent → 7-question condensed intake → `resourceLookup` → share providers → offer follow-up.
+consent → 7-question condensed intake → ask about follow-up → `resourceLookup` (with escalationRoute) → share providers.
 
-### Test 2A — Food assistance
+### Test 2A — Food assistance (with follow-up)
 ```
 User: I need help finding food
 ```
@@ -75,15 +75,27 @@ User: I work part time
 User: Walmart
 ```
 10. Aria silently checks KB for Thrive@Work partner status (no status message)
-11. Aria calls `resourceLookup` with keyword="food assistance", county="Charleston", zip_code="29407" + all collected client data + instance_id + contact_id
-12. Aria shares top 2-3 providers
-13. Aria asks "Would you like a team member to follow up?"
+11. Aria asks "Would you also like one of our team members to follow up with you about this?"
 ```
 User: Yes please
 ```
-14. Aria sets escalationRoute="callback", mentions follow-up via text → Complete
+12. Aria calls `resourceLookup` with keyword="food assistance", county="Charleston", zip_code="29407", escalationRoute="callback" + all collected client data + instance_id + contact_id
+13. Aria shares top 2-3 providers
+14. Aria mentions follow-up via text → Complete
 
 **Contact attributes saved:** firstName, lastName, zipCode, contactMethod, phoneNumber, employmentStatus, employer, needCategory=Food, path=referral, escalationRoute=callback
+
+### Test 2D — Food assistance (no follow-up)
+```
+User: I need help finding food
+```
+**Expected:** Same intake as 2A, but at the follow-up question:
+```
+User: No thanks, I'm good
+```
+**Expected:** Aria calls `resourceLookup` with escalationRoute="self_service" + all client data. Shares providers. Thanks them → Complete.
+
+**Contact attributes saved:** ...escalationRoute=self_service
 
 ### Test 2B — Rental assistance
 ```
@@ -174,14 +186,18 @@ User: $950 for rent
 ```
 (Employment already collected — Aria skips duplicate question)
 
-6. Aria says "Let me review your situation now" → calls `scoringCalculate` with all data + instance_id + contact_id
-7. Based on recommended_path:
-   - If "direct_support" or "mixed" (during business hours): "Would you like me to connect you with someone now?"
-   - If "referral": Calls `resourceLookup`, shares providers, offers follow-up
+6. Aria checks hours of operation → determines escalationRoute:
+   - During business hours → escalationRoute="live_agent"
+   - After hours → escalationRoute="callback"
+7. Aria says "Let me review your situation now" → calls `scoringCalculate` with all scoring data + escalationRoute + all client data + instance_id + contact_id
+8. Based on recommended_path:
+   - If "direct_support" or "mixed" (during hours): "Would you like me to connect you with someone now?"
+   - If "direct_support" or "mixed" (after hours): informs of hours, offers callback
+   - If "referral": asks "Would you also like a team member to follow up?" → then calls `resourceLookup` with escalationRoute + client data
 ```
 User: Yes, please connect me
 ```
-8. Aria sets escalationRoute="live_agent" → Escalate
+9. Aria → Escalate (escalationRoute already saved as "live_agent" via scoringCalculate)
 
 **Contact attributes saved:** firstName, lastName, zipCode, county, contactMethod, phoneNumber, preferredDays, preferredTimes, age, hasChildrenUnder18, employmentStatus, employer, militaryAffiliation, publicAssistance, needCategory=Housing, needSubcategory=Utilities, path=direct_support, housingSituation, monthlyIncome, monthlyHousingCost, housingScore, employmentScore, financialResilienceScore, compositeScore, priorityFlag, recommendedPath, escalationRoute=live_agent, partnerEmployee (if Boeing is partner)
 
@@ -189,7 +205,7 @@ User: Yes, please connect me
 ```
 User: I need help paying my electric bill
 ```
-**Expected:** Same intake flow, but if outside business hours (after 8:30 PM EST Mon-Fri, after noon Sat, all day Sun), Aria offers callback instead of live connection. Sets escalationRoute="callback".
+**Expected:** Same intake flow, but Aria determines it's outside business hours (after 8:30 PM EST Mon-Fri, after noon Sat, all day Sun) → sets escalationRoute="callback" in `scoringCalculate` call. Informs client of hours, offers callback.
 
 ---
 

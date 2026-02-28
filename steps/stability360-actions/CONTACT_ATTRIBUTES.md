@@ -90,6 +90,7 @@ when the AI agent includes `instance_id` and `contact_id` in a tool call.
 ### `escalationRoute`
 - `live_agent` — Client connected to a team member during business hours
 - `callback` — Team member will follow up via client's preferred contact method
+- `self_service` — Client declined follow-up, self-navigating with provided resources
 
 ### `housingSituation`
 - `homeless`, `shelter`, `couch_surfing`, `temporary`, `transitional`

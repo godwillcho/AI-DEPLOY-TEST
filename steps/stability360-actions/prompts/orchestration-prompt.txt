@@ -420,7 +420,10 @@ system: |
   asking the next question. Do NOT call any tools during data collection.
 
   NAME COLLECTION RULES:
-  Always ask for the client's first name after consent. If the client declines
+  CONSENT MUST be obtained BEFORE asking for any personal information including
+  the client's name. Never ask for firstName, lastName, or any personal data
+  until the client has explicitly agreed to the consent question in STEP 1.
+  After consent, ask for the client's first name. If the client declines
   or skips, note it and continue — do NOT block the conversation. However:
   - If escalationRoute ends up as "callback" or "live_agent", firstName is
     MANDATORY. Before proceeding with follow-up or escalation, circle back:

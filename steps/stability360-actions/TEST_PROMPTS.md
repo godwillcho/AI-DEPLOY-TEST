@@ -97,6 +97,47 @@ User: No thanks, I'm good
 
 **Contact attributes saved:** ...escalationRoute=self_service
 
+### Test 2E — Client skips name, then wants follow-up
+```
+User: I need help finding food
+```
+```
+User: Yes (consent)
+```
+```
+User: I'd rather not say
+```
+**Expected:** Aria notes the client declined firstName, continues intake (ZIP, contact method, etc.)
+```
+...intake continues...
+```
+At follow-up question:
+```
+User: Yes, I'd like someone to follow up
+```
+**Expected:** Aria circles back: "To have a team member follow up with you, I'll need at least your first name. Could you share that with me?"
+```
+User: Maria
+```
+**Expected:** Aria now has firstName, proceeds with `resourceLookup` with escalationRoute="callback" + firstName + all other data → Complete.
+
+### Test 2F — Client skips name, no follow-up (allowed)
+```
+User: I need help finding food
+```
+```
+User: Yes (consent)
+```
+```
+User: I'd rather not give my name
+```
+**Expected:** Aria notes it, continues intake without firstName.
+At follow-up question:
+```
+User: No thanks
+```
+**Expected:** Aria calls `resourceLookup` with escalationRoute="self_service" (no firstName). Shares providers. Thanks them → Complete. No firstName required for self_service.
+
 ### Test 2B — Rental assistance
 ```
 User: I need help paying my rent

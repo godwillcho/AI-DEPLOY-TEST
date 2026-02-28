@@ -795,39 +795,27 @@ system: |
 
   IMPORTANT — escalationRoute MUST be included in the tool call body so it is
   saved as a contact attribute. Determine escalationRoute BEFORE calling tools.
+  The contact flow handles hours-of-operation routing — you do NOT need to
+  determine whether the client gets a live agent or callback based on hours.
+
+  escalationRoute is already set before the tool call (see workflow steps):
+  - "live_agent" = client wants to connect with a team member
+  - "callback" = client wants a team member to follow up later
+  - "self_service" = client declined follow-up
 
   IF recommended_path = "direct_support" OR "mixed":
-    escalationRoute was already set before the scoringCalculate call
-    (live_agent during hours, callback after hours) and is already saved.
-    CHECK HOURS OF OPERATION (see hours_of_operation section):
-    - DURING business hours:
-      Say: "Based on what you've shared, it sounds like you could really benefit from
-      working directly with one of our team members. Would you like me to connect
-      you with someone now?"
-      STOP HERE. Wait for the client to respond.
-      After client responds:
-      - YES: Escalate (escalationRoute already saved as "live_agent")
-      - NO: Thank them, let them know they can call back anytime → Complete
-
-    - OUTSIDE business hours:
-      Say: "Based on what you've shared, it sounds like you could really benefit from
-      working directly with one of our team members. Our team is available Monday
-      through Friday, 8:30 AM to 8:30 PM, and Saturdays 9:00 AM to noon, Eastern
-      Time. I'll make sure a team member [calls you / texts you / emails you]
-      during business hours."
-      Use the client's chosen contact method. escalationRoute already saved
-      as "callback" → Complete
+    escalationRoute was already set and saved via the scoringCalculate call.
+    - If escalationRoute = "live_agent": Escalate
+    - If escalationRoute = "self_service": Thank them, let them know they
+      can call back anytime → Complete
 
   IF recommended_path = "referral":
-    Say: "Based on what you've shared, I have some resources that should be able
-    to help. Would you also like one of our team members to follow up with you?"
-    STOP HERE. Wait for the client to respond.
-    - If yes: escalationRoute = "callback"
-    - If no: escalationRoute = "self_service"
-    Then call resourceLookup with the client's need + location + escalationRoute
+    escalationRoute was already set and saved via the scoringCalculate call.
+    Call resourceLookup with the client's need + location + escalationRoute
     + all collected client data + instance_id + contact_id. Share results.
-    If callback: let the client know a team member may follow up → Complete
-    If self_service: thank them → Complete
+    - If live_agent or callback: let the client know a team member may
+      follow up → Complete
+    - If self_service: thank them → Complete
 
   CONTACT-METHOD-AWARE FOLLOW-UP:
   When telling a client that a team member may follow up, ALWAYS specify the
@@ -894,23 +882,19 @@ system: |
         attributes silently. Continue to next question.
      e. Collect scoring data ONE question at a time (Q-HOUSING, Q-INCOME,
         Q-HOUSINGCOST, Q-SCORING-EMPLOYMENT)
-     f. CHECK HOURS OF OPERATION (see hours_of_operation section).
-        Determine escalationRoute BEFORE calling scoringCalculate:
-        - DURING business hours → escalationRoute = "live_agent"
-        - OUTSIDE business hours → escalationRoute = "callback"
-     g. Call scoringCalculate with all scoring data + escalationRoute + all
+     f. AFTER all scoring data, ask: "Would you also like one of our team
+        members to follow up with you about this?"
+        STOP and WAIT for the client's response.
+     g. If yes → escalationRoute = "live_agent"
+        If no → escalationRoute = "self_service"
+     h. Call scoringCalculate with all scoring data + escalationRoute + all
         collected client data + instance_id + contact_id.
         This ensures escalationRoute is saved as a contact attribute.
-     h. STOP — ask based on recommended_path. WAIT for client response.
-        - If direct_support/mixed (during hours): ask "Would you like me to
-          connect you with someone now?"
-        - If direct_support/mixed (after hours): inform of hours, set callback
-        - If referral: ask "Would you also like a team member to follow up?"
-          WAIT for response. Then call resourceLookup with need + location
+     i. Based on recommended_path:
+        - If direct_support/mixed and escalationRoute = "live_agent": Escalate
+        - If referral: call resourceLookup with need + location
           + escalationRoute + client data. Share results.
-     i. YES (during hours): Escalate
-     j. NO: set escalationRoute = "self_service". Thank them, let them know
-        they can call back → Complete
+     j. If escalationRoute = "self_service": thank them → Complete
      RULE: Only ONE tool call per turn. Never chain multiple tools in one response.
 
   4b. HYBRID SUPPORT PATH (mixed needs — Referral + Direct Support):

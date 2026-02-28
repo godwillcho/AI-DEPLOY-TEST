@@ -186,15 +186,19 @@ User: $950 for rent
 ```
 (Employment already collected — Aria skips duplicate question)
 
-6. Aria asks "Would you also like one of our team members to follow up with you about this?"
+6. Aria says "Let me review your situation now" → calls `scoringCalculate` with all scoring data + all client data + instance_id + contact_id (NO escalationRoute yet)
+7. Aria reads recommended_path from scoring result and asks the appropriate question:
+   - If "direct_support" or "mixed": "It sounds like you could really benefit from working with one of our team members. Would you like me to connect you with someone?"
+   - If "referral": "Would you also like one of our team members to follow up with you?"
 ```
-User: Yes, please
+User: Yes, please connect me
 ```
-7. Aria sets escalationRoute="live_agent"
-8. Aria says "Let me review your situation now" → calls `scoringCalculate` with all scoring data + escalationRoute="live_agent" + all client data + instance_id + contact_id
-9. Based on recommended_path:
-   - If "direct_support" or "mixed": Aria → Escalate (escalationRoute already saved)
-   - If "referral": calls `resourceLookup` with escalationRoute + client data, shares results → Complete
+8. Aria sets escalationRoute based on answer:
+   - "direct_support"/"mixed" + yes → escalationRoute="live_agent"
+   - "referral" + yes → escalationRoute="callback"
+9. Aria calls `resourceLookup` with keyword="utility assistance", county from ZIP, escalationRoute="live_agent" + all client data + instance_id + contact_id (this persists escalationRoute)
+10. Aria shares top 2-3 utility assistance providers
+11. Aria → Escalate (since escalationRoute="live_agent")
 
 **Contact attributes saved:** firstName, lastName, zipCode, county, contactMethod, phoneNumber, preferredDays, preferredTimes, age, hasChildrenUnder18, employmentStatus, employer, militaryAffiliation, publicAssistance, needCategory=Housing, needSubcategory=Utilities, path=direct_support, housingSituation, monthlyIncome, monthlyHousingCost, housingScore, employmentScore, financialResilienceScore, compositeScore, priorityFlag, recommendedPath, escalationRoute=live_agent, partnerEmployee (if Boeing is partner)
 
@@ -202,11 +206,11 @@ User: Yes, please
 ```
 User: I need help paying my electric bill
 ```
-**Expected:** Same intake flow as 4A, but at the follow-up question:
+**Expected:** Same intake and scoring flow as 4A. After scoring, Aria asks the appropriate question based on recommended_path:
 ```
 User: No thanks
 ```
-**Expected:** Aria sets escalationRoute="self_service", calls `scoringCalculate` with escalationRoute="self_service". Based on recommended_path, shares results or thanks them → Complete.
+**Expected:** Aria sets escalationRoute="self_service", calls `resourceLookup` with escalationRoute="self_service" + client data. Shares providers. Thanks them → Complete.
 
 **Contact attributes saved:** ...escalationRoute=self_service
 

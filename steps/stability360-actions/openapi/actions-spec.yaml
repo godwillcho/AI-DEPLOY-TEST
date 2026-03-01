@@ -23,6 +23,10 @@ paths:
         housing, income, and employment data from the client to determine
         their recommended service path.  The tool performs exact mathematical
         scoring — do not attempt to calculate scores yourself.
+        IMPORTANT: You MUST include instance_id (from system variable instanceId),
+        contact_id (from system variable contactId), and ALL collected client data
+        (firstName, lastName, zipCode, county, age, employer, etc.) in every call.
+        These are required for saving contact attributes.
       requestBody:
         required: true
         content:
@@ -34,6 +38,8 @@ paths:
                 - monthly_income
                 - monthly_housing_cost
                 - employment_status
+                - instance_id
+                - contact_id
               properties:
                 housing_situation:
                   type: string
@@ -110,10 +116,10 @@ paths:
                     - unknown
                 instance_id:
                   type: string
-                  description: "Connect instance ID from instanceId session attribute"
+                  description: "REQUIRED. Use the instanceId value from system_variables. Must be included in every call."
                 contact_id:
                   type: string
-                  description: "Contact ID from contactId session attribute"
+                  description: "REQUIRED. Use the contactId value from system_variables. Must be included in every call."
                 firstName:
                   type: string
                   description: "Client first name if collected"
@@ -227,6 +233,11 @@ paths:
         community resource referrals (food, utilities, housing, healthcare, etc.)
         in their area.  The keyword should describe the type of help needed.
         Include county and/or zip_code for more relevant results.
+        IMPORTANT: You MUST include instance_id (from system variable instanceId),
+        contact_id (from system variable contactId), and ALL collected client data
+        (firstName, lastName, zipCode, county, age, employer, needCategory, path,
+        escalationRoute, etc.) in every call. These are required for saving
+        contact attributes.
       requestBody:
         required: true
         content:
@@ -235,6 +246,8 @@ paths:
               type: object
               required:
                 - keyword
+                - instance_id
+                - contact_id
               properties:
                 keyword:
                   type: string
@@ -260,10 +273,10 @@ paths:
                   default: 10
                 instance_id:
                   type: string
-                  description: "Connect instance ID from instanceId session attribute"
+                  description: "REQUIRED. Use the instanceId value from system_variables. Must be included in every call."
                 contact_id:
                   type: string
-                  description: "Contact ID from contactId session attribute"
+                  description: "REQUIRED. Use the contactId value from system_variables. Must be included in every call."
                 firstName:
                   type: string
                   description: "Client first name if collected"

@@ -38,8 +38,6 @@ paths:
                 - monthly_income
                 - monthly_housing_cost
                 - employment_status
-                - instance_id
-                - contact_id
               properties:
                 housing_situation:
                   type: string
@@ -246,8 +244,6 @@ paths:
               type: object
               required:
                 - keyword
-                - instance_id
-                - contact_id
               properties:
                 keyword:
                   type: string
@@ -319,9 +315,6 @@ paths:
                 preferredTimes:
                   type: string
                   description: "Preferred times for callback if collected"
-                county:
-                  type: string
-                  description: "Client county if collected"
                 needCategory:
                   type: string
                   description: "Primary need category"

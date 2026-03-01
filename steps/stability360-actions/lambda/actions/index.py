@@ -106,6 +106,7 @@ ATTR_MAP = {
     'partnerEmployee': 'partnerEmployee', 'partnerEmployer': 'partnerEmployer',
     # Routing
     'escalationRoute': 'escalationRoute',
+    'priorityFlag': 'priorityFlag',
 }
 
 

@@ -135,15 +135,48 @@ paths:
                 employer:
                   type: string
                   description: "Employer name if collected"
+                age:
+                  type: string
+                  description: "Client age if collected"
+                hasChildrenUnder18:
+                  type: string
+                  description: "Whether client has children under 18"
+                militaryAffiliation:
+                  type: string
+                  description: "Military affiliation if collected"
+                publicAssistance:
+                  type: string
+                  description: "Public assistance programs if collected"
+                preferredDays:
+                  type: string
+                  description: "Preferred days for callback if collected"
+                preferredTimes:
+                  type: string
+                  description: "Preferred times for callback if collected"
+                county:
+                  type: string
+                  description: "Client county if collected"
                 needCategory:
                   type: string
                   description: "Primary need category"
+                needSubcategory:
+                  type: string
+                  description: "Need subcategory if collected"
                 path:
                   type: string
                   description: "Intake path (referral or direct_support)"
                 escalationRoute:
                   type: string
                   description: "Routing decision"
+                partnerEmployee:
+                  type: string
+                  description: "Whether client is a Thrive@Work partner employee"
+                partnerEmployer:
+                  type: string
+                  description: "Partner employer name if detected"
+                priorityFlag:
+                  type: string
+                  description: "Priority flag (e.g. urgent for shutoff)"
       responses:
         "200":
           description: "Scoring results"
@@ -255,6 +288,27 @@ paths:
                 employer:
                   type: string
                   description: "Employer name if collected"
+                age:
+                  type: string
+                  description: "Client age if collected"
+                hasChildrenUnder18:
+                  type: string
+                  description: "Whether client has children under 18"
+                militaryAffiliation:
+                  type: string
+                  description: "Military affiliation if collected"
+                publicAssistance:
+                  type: string
+                  description: "Public assistance programs if collected"
+                preferredDays:
+                  type: string
+                  description: "Preferred days for callback if collected"
+                preferredTimes:
+                  type: string
+                  description: "Preferred times for callback if collected"
+                county:
+                  type: string
+                  description: "Client county if collected"
                 needCategory:
                   type: string
                   description: "Primary need category"
@@ -267,6 +321,15 @@ paths:
                 escalationRoute:
                   type: string
                   description: "Routing decision"
+                partnerEmployee:
+                  type: string
+                  description: "Whether client is a Thrive@Work partner employee"
+                partnerEmployer:
+                  type: string
+                  description: "Partner employer name if detected"
+                priorityFlag:
+                  type: string
+                  description: "Priority flag (e.g. urgent for shutoff)"
       responses:
         "200":
           description: "Resource search results"

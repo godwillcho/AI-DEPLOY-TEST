@@ -1569,18 +1569,12 @@ def main():
     if args.enable_mcp or args.connect_instance_id:
         agentcore_client = session.client('bedrock-agentcore-control')
 
-        # Step 5: OpenAPI spec (now handled by CFN custom resource)
+        # Step 5: OpenAPI spec — always upload latest from local file
         logger.info('')
         logger.info('--- Step 5: OpenAPI spec ---')
-        openapi_s3_location = outputs.get('OpenApiSpecS3Location', '')
-        if openapi_s3_location:
-            logger.info('OpenAPI spec uploaded by CFN custom resource: %s', openapi_s3_location)
-            openapi_uri = openapi_s3_location
-        else:
-            logger.info('OpenAPI spec not in CFN outputs — uploading manually...')
-            s3_client = session.client('s3')
-            openapi_uri = upload_openapi_spec(s3_client, spec_bucket, api_url)
-            logger.info('OpenAPI URI: %s', openapi_uri)
+        s3_client = session.client('s3')
+        openapi_uri = upload_openapi_spec(s3_client, spec_bucket, api_url)
+        logger.info('OpenAPI URI: %s', openapi_uri)
 
         # Step 6: Register API key credential
         logger.info('')

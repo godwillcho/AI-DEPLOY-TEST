@@ -138,6 +138,79 @@ User: No thanks
 ```
 **Expected:** Aria calls `resourceLookup` with escalationRoute="self_service" (no firstName). Shares providers. Thanks them → Complete. No firstName required for self_service.
 
+### Test 2G — Client skips ZIP code (blocked)
+```
+User: I need help finding food
+```
+```
+User: Yes (consent)
+```
+```
+User: Sarah
+```
+```
+User: Miller
+```
+```
+User: I'd rather not share that
+```
+**Expected:** Aria gently explains ZIP is needed: "I understand — I just need your ZIP code so I can find resources in your area. Without it I won't be able to search for you." Asks once more.
+```
+User: I really don't want to give it
+```
+**Expected:** Aria cannot proceed with intake. Falls back to general assistance: "No problem. I can still help you find general food assistance resources. What area are you looking in?" (Same as consent-declined flow — resourceLookup without personal data.)
+
+### Test 2H — Client skips contact info, then wants follow-up (circled back)
+```
+User: I need help finding food
+```
+```
+User: Yes (consent)
+```
+```
+User: James
+User: Wilson
+User: 29407
+User: I'd rather not say (contact method)
+```
+**Expected:** Aria notes it, continues to employment questions.
+```
+...intake continues...
+```
+At follow-up question:
+```
+User: Yes, I'd like a follow-up
+```
+**Expected:** Aria circles back: "For a team member to reach you, I'll need a way to contact you — phone, text, or email?" Waits for answer.
+```
+User: Text me at 843-555-6789
+```
+**Expected:** Aria now has contactMethod=text, phoneNumber=+18435556789. Proceeds with `resourceLookup` with escalationRoute="callback" + all data → Complete.
+
+### Test 2I — Client skips contact info, refuses on circle-back (downgraded to self_service)
+```
+User: I need help finding food
+```
+```
+User: Yes (consent)
+```
+```
+User: Amy
+User: Brown
+User: 29483
+User: I don't want to share that (contact method)
+```
+**Expected:** Aria notes it, continues intake.
+At follow-up question:
+```
+User: Yes, I'd like someone to reach out
+```
+**Expected:** Aria circles back for contact info.
+```
+User: No, I'd rather not
+```
+**Expected:** Aria changes escalationRoute to "self_service" (cannot follow up without contact info). Calls `resourceLookup` with escalationRoute="self_service". Shares providers. Thanks them → Complete.
+
 ### Test 2B — Rental assistance
 ```
 User: I need help paying my rent
@@ -254,6 +327,47 @@ User: No thanks
 **Expected:** Aria sets escalationRoute="self_service", calls `resourceLookup` with escalationRoute="self_service" + client data. Shares providers. Thanks them → Complete.
 
 **Contact attributes saved:** ...escalationRoute=self_service
+
+### Test 4C — Client skips scoring data (downgraded to Referral)
+```
+User: I need help with my utility bills
+```
+**Expected:** Aria classifies as Housing → Utilities [D], asks consent.
+```
+User: Sure
+```
+Aria collects core intake and need-specific questions normally.
+At scoring questions:
+```
+User: I'd rather not say (housing situation)
+```
+**Expected:** Aria gently explains: "This helps me understand your situation so I can connect you with the right level of support." Asks once more.
+```
+User: I really don't want to answer that
+```
+**Expected:** Aria skips scoring entirely. Treats as Referral path instead — asks: "Would you also like one of our team members to follow up with you?" Then calls `resourceLookup` with escalationRoute based on answer. No scoringCalculate call. No scoring attributes saved.
+
+### Test 4D — Client skips need-specific questions (continues normally)
+```
+User: I need help with my utility bills
+```
+```
+User: Yes (consent)
+User: David
+User: Lee
+User: 29406
+User: Phone call
+User: 843-555-4321
+User: Mondays
+User: Mornings
+User: I'd rather not say (age)
+User: I'd rather not say (children)
+User: I work full time
+User: Amazon
+User: I'd rather not answer (military)
+User: No (assistance)
+```
+**Expected:** Aria notes age=declined, children=declined, military=declined. Does NOT set eligibility flags for those. Continues to scoring data collection normally. No fields blocked. Scoring and escalation proceed as in Test 4A.
 
 ---
 

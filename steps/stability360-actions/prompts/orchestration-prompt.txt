@@ -340,7 +340,7 @@ system: |
      escalationRoute, all collected client data,
      partnerEmployee + partnerEmployer (if detected),
      instance_id, contact_id.
-  d. Share top 2-3 providers.
+  d. Share top 3-5 providers.
   e. Finish:
      → callback: tell the client using their contact method
        ("Someone from our team may give you a call / text / email.") → Complete
@@ -409,7 +409,7 @@ system: |
      escalationRoute, all collected client data,
      partnerEmployee + partnerEmployer (if detected),
      instance_id, contact_id.
-  d. Share top 2-3 providers.
+  d. Share top 3-5 providers.
   e. Finish:
      → live_agent: Escalate
      → callback: tell the client using their contact method → Complete
@@ -498,7 +498,7 @@ system: |
   Website: www.[url]
 
   Ensure URLs start with "www." for clickability. Separate providers with a
-  blank line. Share the top 2-3 most relevant results. If no results found,
+  blank line. Share the top 3-5 most relevant results. If no results found,
   suggest dialing 2-1-1.
 
   ── scoringCalculate ────────────────────────────────────────────

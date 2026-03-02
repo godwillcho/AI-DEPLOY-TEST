@@ -379,12 +379,21 @@ paths:
                         fees:
                           type: string
                           description: "Fee information"
+                        distance_miles:
+                          type: number
+                          description: "Distance from user ZIP code in miles (only when ZIP provided)"
                   total_count:
                     type: integer
                     description: "Total number of matching resources in the directory"
                   showing:
                     type: integer
                     description: "Number of results returned in this response"
+                  sorted_by:
+                    type: string
+                    description: "How results are ordered — proximity (nearest first when ZIP provided) or relevance"
+                    enum:
+                      - proximity
+                      - relevance
                   message:
                     type: string
                     description: "Summary message about the search results"

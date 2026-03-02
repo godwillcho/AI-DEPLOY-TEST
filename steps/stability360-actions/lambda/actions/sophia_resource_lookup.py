@@ -99,23 +99,32 @@ def _strip_html(text):
 
 
 def _parse_results(raw_results, max_results=None):
-    """Parse Sophia API results into a clean, structured format."""
+    """Parse Sophia API results into a clean, structured format.
+
+    Preserves the API's relevance ordering (which already prioritises local
+    results when county/zip are provided in the search filter).
+    """
     max_results = max_results or MAX_RESULTS
     parsed = []
 
     for item in raw_results[:max_results]:
         service = item.get('service', {}) or {}
-        location = item.get('location', {}) or {}
+        location = item.get('location') or {}
         organization = service.get('organization', {}) or {}
-        address = location.get('address', {}) or {}
-        phones = service.get('phones', []) or item.get('phones', []) or []
+
+        # Address lives in location.addresses[] (array), not location.address
+        addresses = location.get('addresses', []) or []
+        address = addresses[0] if addresses else {}
+
+        # Phones: prefer top-level item.phones, fall back to service.phones
+        phones = item.get('phones', []) or service.get('phones', []) or []
 
         # Build address string
         addr_parts = [
             address.get('address1', ''),
             address.get('city', ''),
             address.get('stateProvince', ''),
-            address.get('postalCode', ''),
+            address.get('zipCode', '') or address.get('postalCode', ''),
         ]
         addr_str = ', '.join(p for p in addr_parts if p).strip(', ')
 

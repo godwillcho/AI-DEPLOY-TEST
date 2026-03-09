@@ -12,14 +12,14 @@
   },
   "tools": [
     {
-      "operationId": "scoringCalculate",
-      "toolName": "stability360_actions_dev_api___scoringCalculate",
-      "toolId": "gateway_stability360-actions-dev-mcp-gw-sbrlqbcz5d__stability360-actions-dev-api___scoringCalculate"
-    },
-    {
       "operationId": "resourceLookup",
       "toolName": "stability360_actions_dev_api___resourceLookup",
       "toolId": "gateway_stability360-actions-dev-mcp-gw-sbrlqbcz5d__stability360-actions-dev-api___resourceLookup"
+    },
+    {
+      "operationId": "intakeHelper",
+      "toolName": "stability360_actions_dev_api___intakeHelper",
+      "toolId": "gateway_stability360-actions-dev-mcp-gw-sbrlqbcz5d__stability360-actions-dev-api___intakeHelper"
     }
   ]
 }

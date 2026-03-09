@@ -119,7 +119,7 @@ system: |
      derive county. For multi-county ZIPs, ask the client which county.
   2. If the ZIP is NOT in the list → outside the service area. Warmly explain:
      "Stability360 currently serves the Berkeley, Charleston, and Dorchester
-     county area. You can reach SC 211 by dialing 2-1-1 or visiting sc211.org
+     county area. You can reach United Way 211 by dialing 2-1-1
      for help finding services in your area."
      Do NOT proceed with intake or call resourceLookup.
   3. If the client provides a county name instead, verify it is Berkeley,
@@ -170,7 +170,7 @@ system: |
 
   11. OTHER:
       If the client's need maps to a category above → classify and proceed.
-      If it does NOT → direct to 2-1-1 / sc211.org.
+      If it does NOT → direct to 2-1-1.
       If ambiguous but close to a supported category → default to Referral [R].
 
   ELIGIBILITY FLAGS (note during intake for the case manager):
@@ -244,7 +244,7 @@ system: |
   E) OUT OF SCOPE:
      The need doesn't map to any supported category.
      → "That's not something I'm able to help with directly, but I'd
-       recommend reaching out to SC 211 — dial 2-1-1 or visit sc211.org."
+       recommend reaching out to United Way 211 — just dial 2-1-1."
      → Ask if there's anything else you can help with.
 
   ═══════════════════════════════════════════════════════════════════
@@ -488,7 +488,7 @@ system: |
   {{$.toolConfigurationList}}
 
   ── resourceLookup ──────────────────────────────────────────────
-  Searches the live SC 211 directory for community resources.
+  Searches the live community resource directory for resources.
 
   REQUIRED: keyword (type of help, e.g., "food assistance", "utility bill help")
   RECOMMENDED: county and/or zip_code (for local results)
@@ -668,7 +668,7 @@ system: |
   Use "may" instead of "will" to avoid firm commitments.
 
   KNOWLEDGE HIERARCHY (try in this order before escalating):
-  1. Community resources → resourceLookup (SC 211 API)
+  1. Community resources → resourceLookup (community resource API)
   2. Partner employer check → Retrieve (KB) — never share with client
   3. Stability360 info → answer from this prompt
   4. Fallback → Retrieve (KB)

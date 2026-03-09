@@ -1,7 +1,7 @@
 """
-Stability360 Actions — Sophia 211 Resource Lookup (MCP Tool 6)
+Stability360 Actions — Community Resource Lookup (MCP Tool 6)
 
-Queries the Sophia 211 API (sc211.org) for community resources based on
+Queries the Sophia community resource API for resources based on
 keyword, county, and optional location filters. Returns structured results
 with provider name, description, address, phone, URL, and eligibility.
 
@@ -13,7 +13,10 @@ import math
 import os
 import re
 import logging
+import uuid
+from html import escape as html_escape
 
+import boto3
 import urllib3
 
 logger = logging.getLogger('sophia_resource_lookup')
@@ -24,9 +27,20 @@ SOPHIA_API_URL = os.environ.get(
 )
 SOPHIA_TENANT = os.environ.get('SOPHIA_TENANT', 'sc-prod-0')
 SOPHIA_ORIGIN = os.environ.get('SOPHIA_ORIGIN', 'https://www.sc211.org')
-MAX_RESULTS = int(os.environ.get('SOPHIA_MAX_RESULTS', '10'))
+MAX_RESULTS = int(os.environ.get('SOPHIA_MAX_RESULTS', '3'))
+RESULTS_BUCKET = os.environ.get('RESULTS_BUCKET_NAME', '')
+API_BASE_URL = os.environ.get('API_BASE_URL', '')
+PRESIGNED_URL_EXPIRY = 86400  # 24 hours
 
 http = urllib3.PoolManager()
+_s3_client = None
+
+
+def _get_s3_client():
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = boto3.client('s3')
+    return _s3_client
 
 # ---------------------------------------------------------------------------
 # Tri-county ZIP code coordinates (Berkeley, Charleston, Dorchester)
@@ -99,6 +113,14 @@ ZIP_COORDS = {
     "29477": (33.1845, -80.5732),  # Saint George
     "29483": (33.0280, -80.1739),  # Summerville
     "29484": (33.0023, -80.2267),  # Summerville
+}
+
+# County centroids — fallback when no ZIP is available for proximity sorting.
+# Approximate geographic center of each county.
+COUNTY_CENTROIDS = {
+    'Berkeley':   (33.1960, -79.9510),
+    'Charleston': (32.7765, -79.9311),
+    'Dorchester': (33.0768, -80.4065),
 }
 
 
@@ -174,6 +196,18 @@ def _to_e164(raw_number):
     return f'+{digits}' if digits else ''
 
 
+def _ensure_https(url):
+    """Ensure URL has https:// prefix so links are clickable."""
+    if not url:
+        return ''
+    url = url.strip()
+    if url.startswith('http://') or url.startswith('https://'):
+        return url
+    if url.startswith('www.') or '.' in url:
+        return f'https://{url}'
+    return url
+
+
 def _strip_html(text):
     """Remove HTML tags and decode entities."""
     if not text:
@@ -194,7 +228,7 @@ def _parse_results(raw_results, max_results=None, user_coords=None):
 
     # Parse more than max_results when sorting by proximity so we pick
     # the closest ones from a wider pool.
-    parse_limit = max_results * 3 if user_coords else max_results
+    parse_limit = max_results * 5 if user_coords else max_results
     parsed = []
 
     for item in raw_results[:parse_limit]:
@@ -243,7 +277,7 @@ def _parse_results(raw_results, max_results=None, user_coords=None):
             'description': description,
             'address': addr_str,
             'phones': phone_list,
-            'url': service.get('url') or item.get('url') or '',
+            'url': _ensure_https(service.get('url') or item.get('url') or ''),
             'eligibility': _strip_html(service.get('eligibility', '')),
             'fees': _strip_html(service.get('fees', '')),
         }
@@ -267,8 +301,117 @@ def _parse_results(raw_results, max_results=None, user_coords=None):
     # Sort by distance when available (nearest first)
     if user_coords:
         parsed.sort(key=lambda r: r.get('distance_miles', float('inf')))
+        # Filter out results we KNOW are beyond 50 miles; keep unknown-distance results
+        nearby = [r for r in parsed
+                  if 'distance_miles' not in r or r['distance_miles'] <= 50]
+        if nearby:
+            parsed = nearby
 
     return parsed[:max_results]
+
+
+# ---------------------------------------------------------------------------
+# HTML results page + presigned URL
+# ---------------------------------------------------------------------------
+
+
+def _build_results_html(keyword, parsed_results, zip_code=''):
+    """Build a mobile-friendly HTML page showing all results."""
+    location_label = f' near {zip_code}' if zip_code else ''
+    cards_html = []
+    for i, r in enumerate(parsed_results, 1):
+        name = html_escape(r.get('service_name', 'Unknown'))
+        parts = [f'<h3>{i}. {name}</h3>']
+        if r.get('address'):
+            dist = f' &mdash; {r["distance_miles"]} mi' if r.get('distance_miles') else ''
+            parts.append(f'<p class="addr">{html_escape(r["address"])}{dist}</p>')
+        if r.get('phones'):
+            phone = r['phones'][0]
+            # Extract just the number for tel: link
+            num = phone.split(' ')[0] if ' ' in phone else phone
+            parts.append(f'<p class="phone"><a href="tel:{num}">{html_escape(phone)}</a></p>')
+        if r.get('url'):
+            url = r['url']
+            parts.append(f'<p class="web"><a href="{html_escape(url)}" target="_blank">{html_escape(url)}</a></p>')
+        if r.get('description'):
+            parts.append(f'<p class="desc">{html_escape(r["description"])}</p>')
+        if r.get('eligibility'):
+            parts.append(f'<p class="elig"><strong>Eligibility:</strong> {html_escape(r["eligibility"][:200])}</p>')
+        cards_html.append(f'<div class="card">{"".join(parts)}</div>')
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resources for {html_escape(keyword)}{location_label} — Stability360</title>
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ font-family:-apple-system,system-ui,sans-serif; background:#f5f5f5; color:#333; padding:16px; }}
+  .header {{ background:#1a5276; color:#fff; padding:20px; border-radius:8px; margin-bottom:16px; text-align:center; }}
+  .header h1 {{ font-size:20px; margin-bottom:4px; }}
+  .header p {{ font-size:14px; opacity:0.85; }}
+  .card {{ background:#fff; border-radius:8px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }}
+  .card h3 {{ font-size:16px; color:#1a5276; margin-bottom:8px; }}
+  .card p {{ font-size:14px; margin-bottom:4px; line-height:1.4; }}
+  .card .addr {{ color:#555; }}
+  .card .phone a {{ color:#1a5276; text-decoration:none; font-weight:600; }}
+  .card .web a {{ color:#2980b9; word-break:break-all; }}
+  .card .desc {{ color:#666; font-size:13px; }}
+  .card .elig {{ color:#777; font-size:13px; }}
+  .footer {{ text-align:center; font-size:12px; color:#888; margin-top:20px; padding:12px; }}
+  .footer a {{ color:#2980b9; }}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Community Resources</h1>
+  <p>Results for &ldquo;{html_escape(keyword)}&rdquo;{location_label}</p>
+</div>
+{"".join(cards_html)}
+<div class="footer">
+  Stability360 by Trident United Way<br>
+  This link expires in 24 hours.
+</div>
+</body>
+</html>"""
+
+
+def _upload_results_page(keyword, parsed_results, zip_code=''):
+    """Upload HTML results page to S3 and return a short redirect URL."""
+    if not RESULTS_BUCKET:
+        logger.warning('RESULTS_BUCKET_NAME not set — skipping results page upload')
+        return None
+
+    html_content = _build_results_html(keyword, parsed_results, zip_code)
+    page_id = uuid.uuid4().hex[:12]
+    s3_key = f'results/{page_id}.html'
+
+    try:
+        s3 = _get_s3_client()
+        s3.put_object(
+            Bucket=RESULTS_BUCKET,
+            Key=s3_key,
+            Body=html_content.encode('utf-8'),
+            ContentType='text/html',
+        )
+        # Return short redirect URL instead of long presigned URL
+        # Read at call time (index.py sets this from API Gateway event context)
+        api_base = os.environ.get('API_BASE_URL', '')
+        if api_base:
+            short_url = f'{api_base}/r/{page_id}'
+        else:
+            # Fallback to presigned URL if API_BASE_URL not set
+            short_url = s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': RESULTS_BUCKET, 'Key': s3_key},
+                ExpiresIn=PRESIGNED_URL_EXPIRY,
+            )
+        logger.info('Results page uploaded: s3://%s/%s → %s', RESULTS_BUCKET, s3_key, short_url)
+        return short_url
+    except Exception:
+        logger.error('Failed to upload results page', exc_info=True)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -287,15 +430,20 @@ def handle_resource_lookup(body):
     keyword = body.get('keyword', '')
     county = body.get('county', '')
     city = body.get('city', '')
-    zip_code = body.get('zip_code', '')
+    zip_code = body.get('zip_code', '') or body.get('zipCode', '')
     state = body.get('state', 'South Carolina')
     max_results = min(int(body.get('max_results', MAX_RESULTS)), 20)
 
-    # Look up user coordinates from ZIP for proximity sorting
+    # Look up user coordinates for proximity sorting
+    # Priority: ZIP centroid → county centroid → none
     user_coords = ZIP_COORDS.get(zip_code)
+    coords_source = 'zip'
+    if not user_coords and county:
+        user_coords = COUNTY_CENTROIDS.get(county)
+        coords_source = 'county'
     if user_coords:
-        logger.info('Resource lookup: keyword=%s, county=%s, zip=%s → coords=(%s, %s)',
-                     keyword, county, zip_code, user_coords[0], user_coords[1])
+        logger.info('Resource lookup: keyword=%s, county=%s, zip=%s → coords=(%s, %s) source=%s',
+                     keyword, county, zip_code, user_coords[0], user_coords[1], coords_source)
     else:
         logger.info('Resource lookup: keyword=%s, county=%s, city=%s, zip=%s (no coords)',
                      keyword, county, city, zip_code)
@@ -328,7 +476,7 @@ def handle_resource_lookup(body):
                 'total_count': 0,
                 'message': (
                     'The community resource directory is temporarily unavailable. '
-                    'Please try dialing 211 directly for assistance.'
+                    'A team member may be able to help — offer to connect the client.'
                 ),
                 'source': 'sophia_211_error',
             }
@@ -337,7 +485,6 @@ def handle_resource_lookup(body):
         resp_json = json.loads(resp_text)
 
         raw_results = resp_json.get('payload', [])
-        total_count = len(raw_results)
         parsed = _parse_results(raw_results, max_results, user_coords=user_coords)
 
         if not parsed:
@@ -345,33 +492,58 @@ def handle_resource_lookup(body):
             return {
                 'found': False,
                 'results': [],
-                'total_count': 0,
                 'message': (
                     f'No resources found for "{keyword}" '
                     f'{"in " + county + " County" if county else "in your area"}. '
-                    'You can try dialing 211 for additional help.'
+                    'Offer to connect the client with a team member for assistance.'
                 ),
                 'source': 'sophia_211',
             }
 
         sorted_label = ' (sorted by proximity)' if user_coords else ''
-        logger.info('Found %d results (showing %d%s) for: %s in %s',
-                     total_count, len(parsed), sorted_label, keyword, county or 'state')
+        logger.info('Found results (showing %d%s) for: %s in %s',
+                     len(parsed), sorted_label, keyword, county or 'state')
+
+        # Parse a wider set for the full HTML page (up to 20)
+        all_parsed = _parse_results(raw_results, 20, user_coords=user_coords)
+
+        # Upload HTML results page and get presigned URL
+        browse_url = _upload_results_page(keyword, all_parsed, zip_code)
+
+        # Pre-formatted markdown for the agent to output directly
+        formatted_lines = []
+        for i, r in enumerate(parsed, 1):
+            name = r.get('service_name', 'Unknown')
+            formatted_lines.append(f'**{i}. {name}**')
+            if r.get('address'):
+                dist = f' -- {r["distance_miles"]} mi' if r.get('distance_miles') else ''
+                formatted_lines.append(f'Address: {r["address"]}{dist}')
+            if r.get('phones'):
+                formatted_lines.append(f'Phone: {r["phones"][0]}')
+            if r.get('url'):
+                formatted_lines.append(f'Web: {r["url"]}')
+            if r.get('description'):
+                desc = r['description'][:120]
+                formatted_lines.append(f'({desc})')
+            formatted_lines.append('')
+
+        if browse_url:
+            formatted_lines.append('---')
+            formatted_lines.append(f'**📋 View all results here:** {browse_url}')
+            formatted_lines.append('(Link expires in 24 hours)')
+            formatted_lines.append('')
 
         return {
             'found': True,
             'results': parsed,
-            'total_count': total_count,
-            'showing': len(parsed),
+            'formatted_results': '\n'.join(formatted_lines),
             'sorted_by': 'proximity' if user_coords else 'relevance',
+            'browse_url': browse_url or '',
             'message': (
-                f'Found {total_count} resources for "{keyword}" '
-                f'{"in " + county + " County" if county else "in your area"}. '
-                f'Here are the top {len(parsed)} nearest results.'
-                if user_coords else
-                f'Found {total_count} resources for "{keyword}" '
-                f'{"in " + county + " County" if county else "in your area"}. '
-                f'Here are the top {len(parsed)} results.'
+                f'Here are some nearby resources for "{keyword}". '
+                'Present formatted_results to the caller. '
+                'Do NOT mention how many total results exist. '
+                'The "View all results" link at the bottom expires in 24 hours.'
             ),
             'source': 'sophia_211',
         }
@@ -384,7 +556,7 @@ def handle_resource_lookup(body):
             'total_count': 0,
             'message': (
                 'The community resource directory is temporarily unavailable. '
-                'Please try dialing 211 directly for assistance.'
+                'A team member may be able to help — offer to connect the client.'
             ),
             'source': 'sophia_211_error',
         }

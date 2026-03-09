@@ -3,7 +3,7 @@
 Stability360 — Actions Stack Deployment Script
 
 Deploys the CloudFormation stack (DynamoDB, Lambda, API Gateway, MCP Gateway)
-and configures 2 MCP action tools (scoringCalculate + resourceLookup) with a
+and configures 2 MCP action tools (resourceLookup + intakeHelper) with a
 NEW AI agent (not default).
 
 Deployment steps:
@@ -64,8 +64,8 @@ POLL_INTERVAL = 10
 
 OPENAPI_S3_KEY = 'openapi/actions-spec.yaml'
 
-# 2 MCP tool operation IDs (from OpenAPI spec)
-MCP_TOOL_OPERATIONS = ['scoringCalculate', 'resourceLookup']
+# MCP tool operation IDs (from OpenAPI spec)
+MCP_TOOL_OPERATIONS = ['resourceLookup', 'intakeHelper']
 
 ORCHESTRATION_PROMPT_MODEL = 'us.anthropic.claude-sonnet-4-5-20250929-v1:0'
 
@@ -73,57 +73,25 @@ MCP_TOOL_CONFIG_FILE = os.path.join(SCRIPT_DIR, 'ai-agent-tool-config.json')
 
 # Retrieve tool instruction for this agent
 RETRIEVE_TOOL_INSTRUCTION = (
-    'Use this tool to search the Stability360 knowledge base whenever a '
-    'customer asks about programs, services, eligibility criteria, community '
-    'resources, 211 providers, Thrive@Work employer-based programs, or '
-    'anything related to Stability360 and Trident United Way. Include the '
-    'client\'s county when searching for community resources. Always try '
-    'Retrieve before telling a customer you don\'t have information.'
+    'Search the knowledge base for programs, services, eligibility, '
+    'or community resources. Include county when relevant.'
 )
 
-RETRIEVE_TOOL_EXAMPLES = [
-    (
-        'Customer: What is Stability360?\n'
-        'Agent: Let me find that information for you.\n'
-        'Tool call: Retrieve with query="What is Stability360"\n'
-        'Result: Stability360 is a comprehensive support program...\n'
-        'Agent: Stability360 is a program operated by Trident United Way '
-        'that helps people in the tri-county area access the resources '
-        'they need. Would you like to know more about what we offer?'
-    ),
-    (
-        'Customer: I need help with food in Charleston County.\n'
-        'Agent: Let me look up food resources in your area.\n'
-        'Tool call: Retrieve with query="food assistance Charleston County"\n'
-        'Result: Lowcountry Food Bank serves Charleston County...\n'
-        'Agent: There are several food assistance options in Charleston '
-        'County. The Lowcountry Food Bank has multiple distribution sites, '
-        'and East Cooper Outreach Ministries can help if you\'re in the '
-        'Mount Pleasant area. Would you like more details on any of these?'
-    ),
-]
+RETRIEVE_TOOL_EXAMPLES = []
 
 # MCP tool instructions for each action tool
-SCORING_TOOL_INSTRUCTION = (
-    'Use this tool after collecting housing, income, and employment data '
-    'from the client to determine their recommended service path. The tool '
-    'performs exact mathematical scoring — do not attempt to calculate '
-    'scores yourself. Scoring results are INTERNAL ONLY — never share '
-    'scores or composite values with the client. '
-    'Required inputs: housing_situation, monthly_income, monthly_housing_cost, '
-    'employment_status. Returns scores 1-5 for housing, employment, and '
-    'financial resilience, plus a composite score and recommended path '
-    '(direct_support, mixed, or referral).'
+RESOURCE_LOOKUP_TOOL_INSTRUCTION = (
+    'Search community resources. REQUIRED: keyword, zipCode, instance_id, contact_id. '
+    'ALSO INCLUDE every intake field you collected (firstName, lastName, contactMethod, '
+    'contactInfo, employmentStatus, employer, age, childrenUnder18, monthlyIncome, '
+    'housingSituation, etc.) as additional properties so they are saved as contact attributes. '
+    'Show formatted_results directly to the caller — do NOT mention total counts.'
 )
 
-RESOURCE_LOOKUP_TOOL_INSTRUCTION = (
-    'Use this tool to search the SC 211 community resource directory for '
-    'services matching a keyword and location. Use this when a client needs '
-    'community resource referrals (food, utilities, housing, healthcare, etc.). '
-    'Include the county and/or zip_code for more relevant results. '
-    'Required input: keyword. Optional: county, city, zip_code, max_results. '
-    'Results include provider name, description, address, phone, URL, '
-    'eligibility, and fees.'
+INTAKE_HELPER_TOOL_INSTRUCTION = (
+    'MANDATORY at every intake step. You MUST call this tool — you cannot classify needs, '
+    'validate ZIPs, determine required fields, or check partners without it. '
+    'Actions: classifyNeed, validateZip, getRequiredFields, checkPartner, getNextSteps.'
 )
 
 
@@ -146,14 +114,15 @@ def init_resource_names(stack_name):
     global API_KEY_CREDENTIAL_NAME, MCP_TARGET_NAME
     global AI_AGENT_NAME, AI_AGENT_DESCRIPTION
     global MCP_TOOL_NAMES, MCP_TOOL_NAMES_SAFE
-    global ORCHESTRATION_PROMPT_NAME, SECURITY_PROFILE_NAME
+    global ORCHESTRATION_PROMPT_NAME
+    global SECURITY_PROFILE_NAME
 
     API_KEY_CREDENTIAL_NAME = f'{stack_name}-api-key'
     MCP_TARGET_NAME = f'{stack_name}-api'
 
     AI_AGENT_NAME = f'{stack_name}-orchestration'
     AI_AGENT_DESCRIPTION = (
-        f'AI agent for {stack_name} — Scoring, Resource Lookup, Contact Data '
+        f'AI agent for {stack_name} — Intake Helper, Resource Lookup, Scoring '
         f'({len(MCP_TOOL_OPERATIONS)} MCP tools)'
     )
 
@@ -405,6 +374,58 @@ def teardown_all(session, stack_name, connect_instance_id, region,
             except Exception as e:
                 logger.warning('Could not delete app integration: %s', e)
 
+    # --- 4b. Delete task resources (template, flow, case template) ---
+    if connect_instance_id:
+        connect_client = session.client('connect')
+
+        # Delete task template
+        try:
+            resp = connect_client.list_task_templates(InstanceId=connect_instance_id, Status='ACTIVE')
+            for tmpl in resp.get('TaskTemplates', []):
+                if tmpl.get('Name') == TASK_TEMPLATE_NAME:
+                    logger.info('Deleting task template: %s (%s)', TASK_TEMPLATE_NAME, tmpl['Id'])
+                    connect_client.delete_task_template(
+                        InstanceId=connect_instance_id, TaskTemplateId=tmpl['Id'],
+                    )
+                    logger.info('Task template deleted.')
+                    break
+        except Exception as e:
+            logger.warning('Could not delete task template: %s', e)
+
+        # Delete task contact flow (set to ARCHIVED — Connect flows can't be truly deleted)
+        try:
+            paginator = connect_client.get_paginator('list_contact_flows')
+            for page in paginator.paginate(InstanceId=connect_instance_id):
+                for cf in page.get('ContactFlowSummaryList', []):
+                    if cf['Name'] == TASK_FLOW_NAME:
+                        logger.info('Archiving task flow: %s (%s)', TASK_FLOW_NAME, cf['Id'])
+                        connect_client.update_contact_flow_metadata(
+                            InstanceId=connect_instance_id, ContactFlowId=cf['Id'],
+                            ContactFlowState='ARCHIVED',
+                        )
+                        logger.info('Task flow archived.')
+                        break
+        except Exception as e:
+            logger.warning('Could not archive task flow: %s', e)
+
+        # Delete case template
+        cases_domain_id = get_cases_domain_id(session, connect_instance_id)
+        if cases_domain_id:
+            try:
+                cases_client = session.client('connectcases')
+                resp = cases_client.list_templates(domainId=cases_domain_id, maxResults=50)
+                for t in resp.get('templates', []):
+                    if t['name'] == CASE_TEMPLATE_NAME:
+                        logger.info('Deactivating case template: %s (%s)', CASE_TEMPLATE_NAME, t['templateId'])
+                        cases_client.update_template(
+                            domainId=cases_domain_id, templateId=t['templateId'],
+                            status='Inactive',
+                        )
+                        logger.info('Case template deactivated.')
+                        break
+            except Exception as e:
+                logger.warning('Could not deactivate case template: %s', e)
+
     # --- 5-6. Delete MCP gateway target + gateway ---
     if gateway_id:
         agentcore_client = session.client('bedrock-agentcore-control')
@@ -484,6 +505,28 @@ def update_lambda_code(lambda_client, function_name, code_dir):
         ZipFile=zip_bytes,
     )
     logger.info('Updated. Version: %s', resp.get('Version', 'N/A'))
+
+
+# ---------------------------------------------------------------------------
+# API Gateway — force redeployment after inline Body changes
+# ---------------------------------------------------------------------------
+
+
+def redeploy_api_gateway(session, api_id, stage_name):
+    """Create a new API Gateway deployment to pick up inline Body changes.
+
+    CFN doesn't create a new deployment when the REST API Body changes
+    because the Deployment resource properties are unchanged.  This forces
+    a fresh deployment so new paths/methods take effect.
+    """
+    apigw_client = session.client('apigateway')
+    logger.info('Creating new API Gateway deployment for %s (stage: %s)...', api_id, stage_name)
+    resp = apigw_client.create_deployment(
+        restApiId=api_id,
+        stageName=stage_name,
+        description='Redeploy after CFN inline Body update',
+    )
+    logger.info('API Gateway redeployed. Deployment ID: %s', resp['id'])
 
 
 # ---------------------------------------------------------------------------
@@ -585,7 +628,7 @@ def create_or_update_mcp_target(agentcore_client, gateway_id, target_name,
     ]
     target_description = (
         'Stability360 Actions API — Scoring + Resource Lookup '
-        '(2 MCP tools via single API Gateway)'
+        '(1 MCP tool via API Gateway)'
     )
 
     existing_target_id = find_existing_target(agentcore_client, gateway_id, target_name)
@@ -1002,7 +1045,7 @@ def _build_agent_tool_configurations(gateway_id, assistant_id=None,
     """Build tool configurations for the actions agent.
 
     Includes: Complete, Escalate, Retrieve (KB), and 2 MCP action tools
-    (scoringCalculate + resourceLookup).
+    (resourceLookup + intakeHelper).
     """
     retrieve_tool = {
         'toolName': 'Retrieve',
@@ -1070,8 +1113,8 @@ def _build_agent_tool_configurations(gateway_id, assistant_id=None,
 
     # Add MCP action tools
     tool_instructions = {
-        'scoringCalculate': SCORING_TOOL_INSTRUCTION,
         'resourceLookup': RESOURCE_LOOKUP_TOOL_INSTRUCTION,
+        'intakeHelper': INTAKE_HELPER_TOOL_INSTRUCTION,
     }
 
     for op_id in MCP_TOOL_OPERATIONS:
@@ -1151,26 +1194,47 @@ def _safe_update_ai_agent(qconnect_client, assistant_id, agent_id, config):
     )
 
 
+def set_agent_as_default(session, assistant_id, agent_id):
+    """Set an AI agent as the default ORCHESTRATION agent for the assistant."""
+    qconnect_client = session.client('qconnect')
+    try:
+        qconnect_client.update_assistant_ai_agent(
+            assistantId=assistant_id,
+            aiAgentType='ORCHESTRATION',
+            configuration={
+                'aiAgentId': f'{agent_id}:$LATEST',
+            },
+        )
+        logger.info('Agent %s set as DEFAULT orchestration agent.', agent_id)
+    except Exception as e:
+        logger.warning('Could not set agent as default: %s', e)
+
+
 def create_ai_agent(session, assistant_id, agent_name, description,
                      connect_instance_id, custom_prompt_id=None,
-                     gateway_id=None):
+                     gateway_id=None, set_default=False,
+                     tool_configurations=None):
     """Create a NEW ORCHESTRATION AI agent for the actions tools.
 
-    This agent is NOT set as the default. It exists alongside the
-    thrive-at-work agent.
+    When set_default=True, this agent becomes the default orchestration
+    agent for the assistant (used by the Lex bot / contact flow).
+    If tool_configurations is provided, use those instead of the default.
     """
     qconnect_client = session.client('qconnect')
 
     existing_id, _ = find_existing_ai_agent(qconnect_client, assistant_id, agent_name)
     if existing_id:
         logger.info('AI Agent already exists: %s (ID: %s) — updating config...', agent_name, existing_id)
-        if custom_prompt_id or gateway_id:
+        if custom_prompt_id or gateway_id or tool_configurations:
             try:
-                kb_assoc_id, _ = find_existing_kb_association(qconnect_client, assistant_id)
-                tools = _build_agent_tool_configurations(
-                    gateway_id=gateway_id, assistant_id=assistant_id,
-                    kb_association_id=kb_assoc_id,
-                )
+                if tool_configurations:
+                    tools = tool_configurations
+                else:
+                    kb_assoc_id, _ = find_existing_kb_association(qconnect_client, assistant_id)
+                    tools = _build_agent_tool_configurations(
+                        gateway_id=gateway_id, assistant_id=assistant_id,
+                        kb_association_id=kb_assoc_id,
+                    )
 
                 region = session.region_name
                 account = session.client('sts').get_caller_identity()['Account']
@@ -1191,7 +1255,8 @@ def create_ai_agent(session, assistant_id, agent_name, description,
                 logger.info('AI Agent updated with new tools and prompt.')
             except Exception as e:
                 logger.warning('Could not update agent: %s', e)
-        # NOT setting as default — this is intentional
+        if set_default:
+            set_agent_as_default(session, assistant_id, existing_id)
         return existing_id
 
     prompt_id = custom_prompt_id
@@ -1203,14 +1268,16 @@ def create_ai_agent(session, assistant_id, agent_name, description,
     account = session.client('sts').get_caller_identity()['Account']
     connect_instance_arn = f'arn:aws:connect:{region}:{account}:instance/{connect_instance_id}'
 
-    kb_assoc_id, _ = find_existing_kb_association(qconnect_client, assistant_id)
-    if kb_assoc_id:
-        logger.info('KB association found for Retrieve tool: %s', kb_assoc_id)
-
-    tools = _build_agent_tool_configurations(
-        gateway_id=gateway_id, assistant_id=assistant_id,
-        kb_association_id=kb_assoc_id,
-    )
+    if tool_configurations:
+        tools = tool_configurations
+    else:
+        kb_assoc_id, _ = find_existing_kb_association(qconnect_client, assistant_id)
+        if kb_assoc_id:
+            logger.info('KB association found for Retrieve tool: %s', kb_assoc_id)
+        tools = _build_agent_tool_configurations(
+            gateway_id=gateway_id, assistant_id=assistant_id,
+            kb_association_id=kb_assoc_id,
+        )
     tool_names = [t['toolName'] for t in tools]
 
     config = {
@@ -1247,8 +1314,10 @@ def create_ai_agent(session, assistant_id, agent_name, description,
         except ClientError:
             logger.warning('Could not create agent version', exc_info=True)
 
-        # NOT setting as default — intentional
-        logger.info('Agent created but NOT set as default (actions-only agent).')
+        if set_default:
+            set_agent_as_default(session, assistant_id, agent_id)
+        else:
+            logger.info('Agent created but NOT set as default.')
         return agent_id
 
     except Exception as e:
@@ -1301,13 +1370,385 @@ def generate_tool_config_file(gateway_id, target_name, agent_name,
 
 
 # ---------------------------------------------------------------------------
+# Task template + task flow + profiles/cases domain lookup
+# ---------------------------------------------------------------------------
+
+TASK_TEMPLATE_NAME = 'Stability360-Callback-Task'
+TASK_FLOW_NAME = 'Stability360-Callback-Task-Flow'
+
+
+def find_queue_arn_by_name(connect_client, instance_id, queue_name='BasicQueue'):
+    """Find a queue ARN by name. Returns (queue_id, queue_arn) or (None, None)."""
+    try:
+        paginator = connect_client.get_paginator('list_queues')
+        for page in paginator.paginate(InstanceId=instance_id, QueueTypes=['STANDARD']):
+            for q in page.get('QueueSummaryList', []):
+                if q['Name'] == queue_name:
+                    return q['Id'], q['Arn']
+    except Exception as e:
+        logger.warning('Could not list queues: %s', e)
+    return None, None
+
+
+def create_or_update_task_template(connect_client, instance_id, contact_flow_id=None):
+    """Create or update a task template for callback follow-ups. Returns template ID.
+
+    Requires a ContactFlowId and a field of type NAME (Connect API constraints).
+    """
+    fields = [
+        {'Id': {'Name': 'Name'}, 'Type': 'NAME', 'Description': 'Task name'},
+        {'Id': {'Name': 'Description'}, 'Type': 'DESCRIPTION', 'Description': 'Task description'},
+        {'Id': {'Name': 'clientFirstName'}, 'Type': 'TEXT', 'Description': 'Client first name'},
+        {'Id': {'Name': 'clientLastName'}, 'Type': 'TEXT', 'Description': 'Client last name'},
+        {'Id': {'Name': 'needCategory'}, 'Type': 'TEXT', 'Description': 'Primary need category'},
+        {'Id': {'Name': 'zipCode'}, 'Type': 'TEXT', 'Description': 'Client ZIP code'},
+        {'Id': {'Name': 'contactMethod'}, 'Type': 'TEXT', 'Description': 'Preferred contact method'},
+        {'Id': {'Name': 'contactInfo'}, 'Type': 'TEXT', 'Description': 'Phone number or email'},
+        {'Id': {'Name': 'employmentStatus'}, 'Type': 'TEXT', 'Description': 'Employment status'},
+        {'Id': {'Name': 'employer'}, 'Type': 'TEXT', 'Description': 'Employer name'},
+        {'Id': {'Name': 'preferredDays'}, 'Type': 'TEXT', 'Description': 'Preferred callback days'},
+        {'Id': {'Name': 'preferredTimes'}, 'Type': 'TEXT', 'Description': 'Preferred callback times'},
+    ]
+    constraints = {
+        'RequiredFields': [{'Id': {'Name': 'Name'}}],
+    }
+
+    # Check if template already exists
+    existing_id = None
+    try:
+        resp = connect_client.list_task_templates(InstanceId=instance_id, Status='ACTIVE')
+        for tmpl in resp.get('TaskTemplates', []):
+            if tmpl.get('Name') == TASK_TEMPLATE_NAME:
+                existing_id = tmpl['Id']
+                break
+    except Exception as e:
+        logger.warning('Could not list task templates: %s', e)
+
+    template_kwargs = {
+        'InstanceId': instance_id,
+        'Name': TASK_TEMPLATE_NAME,
+        'Description': 'Callback follow-up task for Stability360 callers',
+        'Fields': fields,
+        'Constraints': constraints,
+        'Status': 'ACTIVE',
+    }
+    if contact_flow_id:
+        template_kwargs['ContactFlowId'] = contact_flow_id
+
+    if existing_id:
+        logger.info('Task template already exists: %s — updating...', existing_id)
+        try:
+            template_kwargs['TaskTemplateId'] = existing_id
+            connect_client.update_task_template(**template_kwargs)
+            logger.info('Task template updated.')
+        except Exception as e:
+            logger.warning('Could not update task template: %s', e)
+        return existing_id
+
+    logger.info('Creating task template: %s', TASK_TEMPLATE_NAME)
+    try:
+        resp = connect_client.create_task_template(**template_kwargs)
+        template_id = resp['Id']
+        logger.info('Task template created: %s', template_id)
+        return template_id
+    except Exception as e:
+        logger.warning('Could not create task template: %s', e)
+        return None
+
+
+def create_or_update_task_flow(connect_client, instance_id, queue_arn):
+    """Create or update a task contact flow: Get Customer Profile -> Set Working Queue -> Transfer to Queue -> Disconnect."""
+    flow_content = json.dumps({
+        'Version': '2019-10-30',
+        'StartAction': 'get-profile',
+        'Metadata': {
+            'entryPointPosition': {'x': 20, 'y': 20},
+            'ActionMetadata': {
+                'get-profile': {'position': {'x': 20, 'y': 20}},
+                'set-queue': {'position': {'x': 300, 'y': 20}},
+                'transfer': {'position': {'x': 580, 'y': 20}},
+                'disconnect': {'position': {'x': 860, 'y': 20}},
+            },
+        },
+        'Actions': [
+            {
+                'Identifier': 'get-profile',
+                'Type': 'GetCustomerProfile',
+                'Parameters': {
+                    'ProfileRequestData': {
+                        'IdentifierName': '_profileId',
+                        'IdentifierValue': '$.Attributes.customerProfileId',
+                    },
+                    'ProfileResponseData': [
+                        'FirstName',
+                        'LastName',
+                        'PhoneNumber',
+                        'EmailAddress',
+                    ],
+                },
+                'Transitions': {
+                    'NextAction': 'set-queue',
+                    'Errors': [
+                        {'ErrorType': 'MultipleFoundError', 'NextAction': 'set-queue'},
+                        {'ErrorType': 'NoneFoundError', 'NextAction': 'set-queue'},
+                        {'ErrorType': 'NoMatchingError', 'NextAction': 'set-queue'},
+                    ],
+                },
+            },
+            {
+                'Identifier': 'set-queue',
+                'Type': 'UpdateContactTargetQueue',
+                'Parameters': {'QueueId': queue_arn},
+                'Transitions': {
+                    'NextAction': 'transfer',
+                    'Errors': [{'NextAction': 'disconnect', 'ErrorType': 'NoMatchingError'}],
+                },
+            },
+            {
+                'Identifier': 'transfer',
+                'Type': 'TransferContactToQueue',
+                'Parameters': {},
+                'Transitions': {
+                    'NextAction': 'disconnect',
+                    'Errors': [
+                        {'NextAction': 'disconnect', 'ErrorType': 'QueueAtCapacity'},
+                        {'NextAction': 'disconnect', 'ErrorType': 'NoMatchingError'},
+                    ],
+                },
+            },
+            {
+                'Identifier': 'disconnect',
+                'Type': 'DisconnectParticipant',
+                'Parameters': {},
+                'Transitions': {},
+            },
+        ],
+    })
+
+    # Check if flow already exists
+    existing_flow_id = None
+    try:
+        paginator = connect_client.get_paginator('list_contact_flows')
+        for page in paginator.paginate(InstanceId=instance_id):
+            for cf in page.get('ContactFlowSummaryList', []):
+                if cf['Name'] == TASK_FLOW_NAME:
+                    existing_flow_id = cf['Id']
+                    break
+            if existing_flow_id:
+                break
+    except Exception as e:
+        logger.warning('Could not list contact flows: %s', e)
+
+    if existing_flow_id:
+        logger.info('Task flow already exists: %s — updating...', existing_flow_id)
+        try:
+            connect_client.update_contact_flow_content(
+                InstanceId=instance_id, ContactFlowId=existing_flow_id,
+                Content=flow_content,
+            )
+            logger.info('Task flow updated.')
+        except Exception as e:
+            logger.warning('Could not update task flow: %s', e)
+        return existing_flow_id
+
+    logger.info('Creating task flow: %s', TASK_FLOW_NAME)
+    try:
+        resp = connect_client.create_contact_flow(
+            InstanceId=instance_id, Name=TASK_FLOW_NAME,
+            Type='CONTACT_FLOW',
+            Description='Task flow for Stability360 callback tasks — routes to BasicQueue',
+            Content=flow_content, Status='PUBLISHED',
+        )
+        flow_id = resp['ContactFlowId']
+        logger.info('Task flow created: %s', flow_id)
+        return flow_id
+    except Exception as e:
+        logger.warning('Could not create task flow: %s', e)
+        return None
+
+
+def get_customer_profiles_domain(session, connect_instance_id):
+    """Look up the Customer Profiles domain linked to this Connect instance."""
+    try:
+        profiles_client = session.client('customer-profiles')
+        resp = profiles_client.list_domains()
+        domains = resp.get('Items', [])
+        # Try to find a domain that matches the instance
+        for domain in domains:
+            domain_name = domain.get('DomainName', '')
+            if domain_name:
+                logger.info('Customer Profiles domain found: %s', domain_name)
+                return domain_name
+        # If only one domain, use it
+        if len(domains) == 1:
+            domain_name = domains[0].get('DomainName', '')
+            logger.info('Using single Customer Profiles domain: %s', domain_name)
+            return domain_name
+    except Exception as e:
+        logger.warning('Could not look up Customer Profiles domain: %s', e)
+    return None
+
+
+def get_cases_domain_id(session, connect_instance_id):
+    """Look up the Cases domain ID for this Connect instance."""
+    try:
+        cases_client = session.client('connectcases')
+        resp = cases_client.list_domains()
+        for domain in resp.get('domains', []):
+            # Cases domain ARN contains the instance ID
+            domain_arn = domain.get('domainArn', '')
+            domain_id = domain.get('domainId', '')
+            if connect_instance_id in domain_arn or domain_id:
+                logger.info('Cases domain found: %s (ID: %s)', domain.get('name', ''), domain_id)
+                return domain_id
+        # If only one domain, use it
+        domains = resp.get('domains', [])
+        if len(domains) == 1:
+            domain_id = domains[0]['domainId']
+            logger.info('Using single Cases domain: %s', domain_id)
+            return domain_id
+    except Exception as e:
+        logger.warning('Could not look up Cases domain: %s', e)
+    return None
+
+
+CASE_TEMPLATE_NAME = 'Stability360-Intake-Case'
+
+
+def create_or_find_case_template(cases_client, domain_id):
+    """Create or find a Stability360 case template. Returns template_id."""
+    # Check if our template already exists
+    try:
+        resp = cases_client.list_templates(domainId=domain_id, maxResults=50)
+        for t in resp.get('templates', []):
+            if t['name'] == CASE_TEMPLATE_NAME:
+                template_id = t['templateId']
+                logger.info('Case template already exists: %s (%s)', CASE_TEMPLATE_NAME, template_id)
+                return template_id
+    except Exception as e:
+        logger.warning('Could not list case templates: %s', e)
+
+    # Create new template — only requires title (system field)
+    try:
+        resp = cases_client.create_template(
+            domainId=domain_id,
+            name=CASE_TEMPLATE_NAME,
+            description='Stability360 intake case — auto-created for callback/escalation',
+            requiredFields=[
+                {'fieldId': 'title'},
+            ],
+            status='Active',
+        )
+        template_id = resp['templateId']
+        logger.info('Case template created: %s (%s)', CASE_TEMPLATE_NAME, template_id)
+        return template_id
+    except Exception as e:
+        logger.warning('Could not create case template: %s', e)
+        return None
+
+
+def update_lambda_env_vars(lambda_client, function_name, new_vars):
+    """Merge new environment variables into the Lambda function's existing config."""
+    try:
+        current = lambda_client.get_function_configuration(FunctionName=function_name)
+        env_vars = current.get('Environment', {}).get('Variables', {})
+        env_vars.update(new_vars)
+        lambda_client.update_function_configuration(
+            FunctionName=function_name,
+            Environment={'Variables': env_vars},
+        )
+        logger.info('Lambda env vars updated: %s', list(new_vars.keys()))
+    except Exception as e:
+        logger.warning('Could not update Lambda env vars: %s', e)
+
+
+def deploy_task_resources(session, connect_instance_id, lambda_function_name, region):
+    """Deploy task template, task flow, and look up profiles/cases domains.
+
+    Updates Lambda env vars with the new resource IDs.
+    """
+    connect_client = session.client('connect')
+    lambda_client = session.client('lambda')
+
+    new_env = {}
+
+    # 1. Find BasicQueue
+    logger.info('')
+    logger.info('--- Task Resources: Look up BasicQueue ---')
+    queue_id, queue_arn = find_queue_arn_by_name(connect_client, connect_instance_id)
+    if queue_arn:
+        logger.info('BasicQueue ARN: %s', queue_arn)
+        new_env['BASIC_QUEUE_ARN'] = queue_arn
+    else:
+        logger.warning('BasicQueue not found — task creation will fail at runtime.')
+
+    # 2. Task contact flow (must be created before template — template needs flow ID)
+    logger.info('')
+    logger.info('--- Task Resources: Create task contact flow ---')
+    task_flow_id = None
+    if queue_arn:
+        task_flow_id = create_or_update_task_flow(connect_client, connect_instance_id, queue_arn)
+    if task_flow_id:
+        new_env['TASK_CONTACT_FLOW_ID'] = task_flow_id
+
+    # 3. Task template (requires task flow ID)
+    logger.info('')
+    logger.info('--- Task Resources: Create task template ---')
+    task_template_id = create_or_update_task_template(
+        connect_client, connect_instance_id, contact_flow_id=task_flow_id,
+    )
+    if task_template_id:
+        new_env['TASK_TEMPLATE_ID'] = task_template_id
+
+    # 4. Customer Profiles domain
+    logger.info('')
+    logger.info('--- Task Resources: Look up Customer Profiles domain ---')
+    profiles_domain = get_customer_profiles_domain(session, connect_instance_id)
+    if profiles_domain:
+        new_env['CUSTOMER_PROFILES_DOMAIN'] = profiles_domain
+    else:
+        logger.warning('Customer Profiles domain not found.')
+
+    # 5. Cases domain
+    logger.info('')
+    logger.info('--- Task Resources: Look up Cases domain ---')
+    cases_domain_id = get_cases_domain_id(session, connect_instance_id)
+    if cases_domain_id:
+        new_env['CONNECT_CASES_DOMAIN_ID'] = cases_domain_id
+    else:
+        logger.warning('Cases domain not found.')
+
+    # 5b. Case template
+    if cases_domain_id:
+        logger.info('')
+        logger.info('--- Task Resources: Create case template ---')
+        cases_client = session.client('connectcases')
+        case_template_id = create_or_find_case_template(cases_client, cases_domain_id)
+        if case_template_id:
+            new_env['CASE_TEMPLATE_ID'] = case_template_id
+
+    # Store Connect instance ID for Lambda runtime
+    new_env['CONNECT_INSTANCE_ID'] = connect_instance_id
+    new_env['CONNECT_REGION'] = region
+
+    # 6. Update Lambda env vars
+    if new_env:
+        logger.info('')
+        logger.info('--- Task Resources: Update Lambda env vars ---')
+        time.sleep(5)  # Wait for any prior Lambda updates to settle
+        update_lambda_env_vars(lambda_client, lambda_function_name, new_env)
+
+    return new_env
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Deploy Stability360 Actions stack (2 MCP tools)',
+        description='Deploy Stability360 Actions stack (1 MCP tool)',
     )
     parser.add_argument('--stack-name', default=DEFAULT_STACK_NAME)
     parser.add_argument('--region', default=DEFAULT_REGION)
@@ -1329,6 +1770,8 @@ def main():
                              'integration, credentials, CFN stack)')
     parser.add_argument('--delete-security-profile', action='store_true',
                         help='With --teardown: also attempt to delete the Connect security profile')
+    parser.add_argument('--set-default', action='store_true',
+                        help='Set the AI agent as the default orchestration agent for the assistant')
     args = parser.parse_args()
 
     # Init resource names
@@ -1380,7 +1823,7 @@ def main():
         logger.info('Prompt updated: %s', prompt_id)
         return
 
-    # --- Connect-only mode (skip CFN steps 1-4, do MCP 5-7 + Connect 8-13) ---
+    # --- Connect-only mode (skip CFN steps 1-4, do MCP 5-7 + Connect 8-12) ---
     if args.connect_only:
         if not args.connect_instance_id:
             logger.error('--connect-instance-id required for --connect-only')
@@ -1451,14 +1894,17 @@ def main():
         logger.info('')
         logger.info('--- Step 11: Create orchestration prompt ---')
         assistant_id, _ = find_qconnect_assistant(session, args.connect_instance_id)
+        qconnect_client = session.client('qconnect')
         prompt_id = None
         if assistant_id:
             prompt_id = create_or_update_orchestration_prompt(
                 session, assistant_id, ORCHESTRATION_PROMPT_NAME,
                 ORCHESTRATION_PROMPT_FILE, args.model_id,
             )
+
         logger.info('')
-        logger.info('--- Step 12: Create AI Agent (NOT default) ---')
+        default_label = '' if not args.set_default else ' → SET AS DEFAULT'
+        logger.info('--- Step 12: Create AI Agent%s ---', default_label)
         agent_id = None
         if assistant_id and prompt_id:
             agent_id = create_ai_agent(
@@ -1466,7 +1912,9 @@ def main():
                 args.connect_instance_id,
                 custom_prompt_id=prompt_id,
                 gateway_id=gateway_id,
+                set_default=args.set_default,
             )
+
         logger.info('')
         logger.info('--- Step 13: Generate MCP tool config ---')
         if gateway_id and agent_id and assistant_id:
@@ -1474,10 +1922,20 @@ def main():
                 gateway_id, MCP_TARGET_NAME, AI_AGENT_NAME,
                 agent_id, assistant_id, MCP_TOOL_CONFIG_FILE,
             )
+
+        # Step 14: Task resources (template, flow, profiles, cases)
+        logger.info('')
+        logger.info('--- Step 14: Deploy task resources ---')
+        actions_function = outputs.get('ActionsFunctionName', '')
+        if actions_function:
+            deploy_task_resources(
+                session, args.connect_instance_id, actions_function, args.region,
+            )
+
         logger.info('')
         logger.info('=' * 60)
         logger.info('Connect-only deployment complete!')
-        logger.info('Agent: %s', agent_id or 'N/A')
+        logger.info('Agent:  %s', agent_id or 'N/A')
         logger.info('Tools: %s', ', '.join(MCP_TOOL_OPERATIONS))
         logger.info('=' * 60)
         return
@@ -1553,11 +2011,16 @@ def main():
     for k, v in sorted(outputs.items()):
         logger.info('  %s = %s', k, v)
 
+    api_id = outputs.get('ActionsApiId', '')
     api_url = outputs.get('ActionsApiUrl', '')
     spec_bucket = outputs.get('SpecBucketName', '')
     actions_function = outputs.get('ActionsFunctionName', '')
     api_key_id = outputs.get('ActionsApiKeyId', '')
     gateway_id = outputs.get('McpGatewayId', '')
+
+    # --- Step 2b: Redeploy API Gateway (inline Body changes need fresh deployment) ---
+    if action in ('CREATE', 'UPDATE') and api_id:
+        redeploy_api_gateway(session, api_id, args.environment)
 
     # --- Step 3: Update Lambda code ---
     logger.info('')
@@ -1630,6 +2093,7 @@ def main():
         logger.info('')
         logger.info('--- Step 11: Create orchestration prompt ---')
         assistant_id, _ = find_qconnect_assistant(session, args.connect_instance_id)
+        qconnect_client = session.client('qconnect')
         prompt_id = None
         if assistant_id:
             prompt_id = create_or_update_orchestration_prompt(
@@ -1639,9 +2103,10 @@ def main():
         else:
             logger.warning('No Q Connect assistant found.')
 
-        # Step 12: Create AI Agent (NOT default)
+        # Step 12: Create AI Agent
         logger.info('')
-        logger.info('--- Step 12: Create AI Agent (NOT default) ---')
+        default_label = '' if not args.set_default else ' → SET AS DEFAULT'
+        logger.info('--- Step 12: Create AI Agent%s ---', default_label)
         agent_id = None
         if assistant_id and prompt_id:
             agent_id = create_ai_agent(
@@ -1649,6 +2114,7 @@ def main():
                 args.connect_instance_id,
                 custom_prompt_id=prompt_id,
                 gateway_id=gateway_id,
+                set_default=args.set_default,
             )
 
         # Step 13: Generate tool config reference
@@ -1659,6 +2125,13 @@ def main():
                 gateway_id, MCP_TARGET_NAME, AI_AGENT_NAME,
                 agent_id, assistant_id, MCP_TOOL_CONFIG_FILE,
             )
+
+        # Step 14: Task resources (template, flow, profiles, cases)
+        logger.info('')
+        logger.info('--- Step 14: Deploy task resources ---')
+        deploy_task_resources(
+            session, args.connect_instance_id, actions_function, args.region,
+        )
 
     # --- Summary ---
     logger.info('')
@@ -1675,12 +2148,11 @@ def main():
         logger.info('Tools:           %s', ', '.join(MCP_TOOL_OPERATIONS))
     if args.connect_instance_id:
         logger.info('Connect:         %s', args.connect_instance_id)
-        logger.info('Agent:           %s (NOT default)', AI_AGENT_NAME)
+        logger.info('Agent:           %s', AI_AGENT_NAME)
         logger.info('Security Profile:%s', SECURITY_PROFILE_NAME)
 
     logger.info('')
-    logger.info('Test endpoints:')
-    logger.info('  POST %s/scoring/calculate', api_url)
+    logger.info('Test endpoint:')
     logger.info('  POST %s/resources/search', api_url)
 
 

@@ -441,7 +441,7 @@ User: Sarah
 User: Miller
 User: 29201
 ```
-**Expected:** Aria recognizes 29201 (Columbia/Richland County) is NOT in the service area. Aria warmly explains Stability360 serves the tri-county area and directs client to dial 2-1-1 or visit sc211.org. Does NOT proceed with intake.
+**Expected:** Aria recognizes 29201 (Columbia/Richland County) is NOT in the service area. Aria warmly explains Stability360 serves the tri-county area and directs client to dial 2-1-1. Does NOT proceed with intake.
 
 ---
 

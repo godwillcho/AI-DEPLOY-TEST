@@ -74,8 +74,14 @@ def _clamp(value, low=1, high=5):
 def _score_housing(data):
     """Housing stability score (1–5)."""
     situation = data.get('housing_situation', 'renting_stable')
-    monthly_income = data.get('monthly_income', 0)
-    monthly_housing_cost = data.get('monthly_housing_cost', 0)
+    try:
+        monthly_income = float(data.get('monthly_income', 0) or 0)
+    except (ValueError, TypeError):
+        monthly_income = 0
+    try:
+        monthly_housing_cost = float(data.get('monthly_housing_cost', 0) or 0)
+    except (ValueError, TypeError):
+        monthly_housing_cost = 0
     challenges = data.get('housing_challenges', [])
 
     # Base score from situation
@@ -119,7 +125,10 @@ def _score_employment(data):
     """Employment stability score (1–5)."""
     status = data.get('employment_status', 'full_time')
     has_benefits = data.get('has_benefits', False)
-    monthly_income = data.get('monthly_income', 0)
+    try:
+        monthly_income = float(data.get('monthly_income', 0) or 0)
+    except (ValueError, TypeError):
+        monthly_income = 0
 
     base = EMPLOYMENT_STATUS_BASE.get(status, 3)
 
@@ -152,7 +161,10 @@ def _score_employment(data):
 
 def _score_financial(data):
     """Financial resilience score (1–5)."""
-    monthly_income = data.get('monthly_income', 0)
+    try:
+        monthly_income = float(data.get('monthly_income', 0) or 0)
+    except (ValueError, TypeError):
+        monthly_income = 0
     monthly_expenses = data.get('monthly_expenses', 0)
     savings_rate = data.get('savings_rate', 0)
     fico_range = data.get('fico_range', 'unknown')
@@ -206,6 +218,31 @@ def _score_financial(data):
 # ---------------------------------------------------------------------------
 
 
+SCORE_LABELS = {
+    1: 'In Crisis',
+    2: 'Vulnerable',
+    3: 'Stable',
+    4: 'Safe',
+    5: 'Thriving',
+}
+
+
+def _score_label(score):
+    """Return a human-readable label for a score, rounding to nearest int."""
+    return SCORE_LABELS.get(round(score), 'Unknown')
+
+PATH_LABELS = {
+    'direct_support': 'Direct Support — immediate hands-on assistance recommended',
+    'mixed': 'Mixed — combination of direct support and resource referrals',
+    'referral': 'Referral — community resource referrals sufficient',
+}
+
+PRIORITY_LABELS = {
+    True: 'Urgent — at least one area is in crisis, prioritize immediate help',
+    False: 'Standard — no crisis indicators detected',
+}
+
+
 def _compute_composite(housing, employment, financial):
     """Composite score and recommended path."""
     h = housing['score']
@@ -249,19 +286,34 @@ def handle_scoring(body):
     record_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
 
+    h_label = _score_label(housing['score'])
+    e_label = _score_label(employment['score'])
+    f_label = _score_label(financial['score'])
+    c_label = _score_label(composite)
+
     result = {
         'status': 'success',
         'record_id': record_id,
         'housing_score': housing['score'],
+        'housing_label': h_label,
         'employment_score': employment['score'],
+        'employment_label': e_label,
         'financial_resilience_score': financial['score'],
+        'financial_label': f_label,
         'composite_score': composite,
+        'composite_label': c_label,
         'priority_flag': priority,
+        'priority_meaning': PRIORITY_LABELS.get(priority, ''),
         'recommended_path': path,
+        'path_meaning': PATH_LABELS.get(path, ''),
         'message': (
-            f'Scoring complete. Path: {path}. '
-            f'Housing={housing["score"]}, Employment={employment["score"]}, '
-            f'Financial={financial["score"]}, Composite={composite}.'
+            f'Scoring complete. '
+            f'Housing: {housing["score"]}/5 ({h_label}), '
+            f'Employment: {employment["score"]}/5 ({e_label}), '
+            f'Financial: {financial["score"]}/5 ({f_label}), '
+            f'Composite: {composite}/5. '
+            f'Path: {PATH_LABELS.get(path, path)}. '
+            f'Priority: {PRIORITY_LABELS.get(priority, "")}.'
         ),
     }
 

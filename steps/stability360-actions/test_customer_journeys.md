@@ -344,7 +344,7 @@
 | 6 | Client | Yes | |
 | 7 | Aria | *(Q1)* | "What ZIP code do you live in?" |
 | 8 | Client | 29201 | |
-| 9 | Aria | *(out of area)* | "I appreciate you reaching out! Stability360 currently serves the Berkeley, Charleston, and Dorchester county area... I'd recommend reaching out to SC 211 — you can dial 2-1-1 or visit sc211.org..." |
+| 9 | Aria | *(out of area)* | "I appreciate you reaching out! Stability360 currently serves the Berkeley, Charleston, and Dorchester county area... I'd recommend reaching out to United Way 211 — just dial 2-1-1..." |
 
 ### Validation Checklist — Journey 7
 
@@ -352,7 +352,7 @@
 |---|-------|-----------|-------|
 | 1 | Consent asked before ZIP | | |
 | 2 | 29201 recognized as outside service area | | |
-| 3 | Directed to 211 (dial 2-1-1 or sc211.org) | | |
+| 3 | Directed to 211 (dial 2-1-1) | | |
 | 4 | Tri-county area mentioned (Berkeley, Charleston, Dorchester) | | |
 | 5 | Intake STOPS — no further questions after ZIP rejection | | |
 | 6 | resourceLookup NOT called | | |

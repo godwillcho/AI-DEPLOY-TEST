@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Stability360 Actions Stack — 2 MCP Action Tools (Scoring Calculator,
-  Resource Lookup).  Single Lambda function with modular routing,
+  Stability360 Actions Stack — 1 MCP Action Tool (Resource Lookup with
+  auto-scoring).  Single Lambda function with modular routing,
   API Gateway with inline OpenAPI Body, DynamoDB for records,
   and AgentCore MCP Gateway.
 
@@ -136,6 +136,12 @@ Resources:
       BucketName: !Sub '${AWS::StackName}-specs-${AWS::Region}-${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireResultPages
+            Prefix: results/
+            Status: Enabled
+            ExpirationInDays: 1
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -264,6 +270,66 @@ Resources:
                 Action:
                   - connect:UpdateContactAttributes
                 Resource: !Sub 'arn:aws:connect:${AWS::Region}:${AWS::AccountId}:instance/*/contact/*'
+        - PolicyName: S3ResultsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${SpecBucket.Arn}/results/*'
+        - PolicyName: ConnectTaskOperations
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - connect:StartTaskContact
+                  - connect:ListQueues
+                  - connect:DescribeQueue
+                  - connect:ListTaskTemplates
+                  - connect:CreateTaskTemplate
+                  - connect:UpdateTaskTemplate
+                  - connect:ListContactFlows
+                  - connect:CreateContactFlow
+                  - connect:UpdateContactFlowContent
+                  - connect:GetCurrentMetricData
+                  - connect:DescribeContact
+                Resource:
+                  - !Sub 'arn:aws:connect:*:${AWS::AccountId}:instance/*'
+        - PolicyName: CustomerProfilesAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - profile:SearchProfiles
+                  - profile:CreateProfile
+                  - profile:UpdateProfile
+                  - profile:GetDomain
+                  - profile:ListDomains
+                Resource:
+                  - !Sub 'arn:aws:profile:*:${AWS::AccountId}:domains/*'
+        - PolicyName: ConnectCasesAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cases:CreateCase
+                  - cases:CreateRelatedItem
+                  - cases:GetCase
+                  - cases:UpdateCase
+                  - cases:SearchCases
+                  - cases:GetDomain
+                  - cases:ListTemplates
+                  - cases:CreateTemplate
+                  - cases:GetTemplate
+                  - cases:BatchGetField
+                  - cases:ListFields
+                  - cases:ListFieldOptions
+                Resource: '*'
         - PolicyName: XRayAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -276,7 +342,7 @@ Resources:
     DeletionPolicy: Delete
 
   # =======================================================
-  # Lambda — Actions Handler (single function, 2 routes)
+  # Lambda — Actions Handler (single function)
   # =======================================================
 
   ActionsFunction:
@@ -302,7 +368,8 @@ Resources:
           SOPHIA_API_URL: 'https://api-prod-0.sophia-app.com/api/services/search/keyword-search'
           SOPHIA_TENANT: 'sc-prod-0'
           SOPHIA_ORIGIN: 'https://www.sc211.org'
-          SOPHIA_MAX_RESULTS: '10'
+          SOPHIA_MAX_RESULTS: '3'
+          RESULTS_BUCKET_NAME: !Ref SpecBucket
       Code:
         ZipFile: |
           import json
@@ -318,14 +385,14 @@ Resources:
 
   # =======================================================
   # API Gateway — Inline OpenAPI Body (hotel template pattern)
-  # All 6 POST endpoints, single Lambda backend
+  # 2 POST endpoints, single Lambda backend
   # =======================================================
 
   ActionsApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub '${AWS::StackName}-actions-api'
-      Description: 'Stability360 Actions API — 2 MCP Tools'
+      Description: 'Stability360 Actions API — Resource Lookup'
       Body:
         openapi: '3.0.1'
         info:
@@ -333,10 +400,10 @@ Resources:
           description: 'API for Stability360 action tools'
           version: '1.0.0'
         paths:
-          /scoring/calculate:
+          /intake/helper:
             post:
-              operationId: 'scoringCalculate'
-              summary: 'Calculate Self-Sufficiency Matrix scores'
+              operationId: 'intakeHelper'
+              summary: 'Validate ZIP, get required fields, or check partner'
               security:
                 - api_key: []
               requestBody:
@@ -346,38 +413,42 @@ Resources:
                     schema:
                       type: 'object'
                       required:
-                        - housing_situation
-                        - monthly_income
-                        - monthly_housing_cost
-                        - employment_status
+                        - action
                       properties:
-                        housing_situation:
+                        action:
                           type: 'string'
-                        monthly_income:
-                          type: 'number'
-                        monthly_housing_cost:
-                          type: 'number'
-                        employment_status:
+                        need:
                           type: 'string'
-                        housing_challenges:
-                          type: 'array'
-                          items:
-                            type: 'string'
-                        has_benefits:
+                        zipCode:
+                          type: 'string'
+                        category:
+                          type: 'string'
+                        employer:
+                          type: 'string'
+                        hasResults:
                           type: 'boolean'
-                        monthly_expenses:
-                          type: 'number'
-                        savings_rate:
-                          type: 'number'
-                        fico_range:
-                          type: 'string'
               responses:
                 '200':
-                  description: 'Scoring results'
-                '400':
-                  description: 'Invalid request'
-                '500':
-                  description: 'Server error'
+                  description: 'Intake helper result'
+              x-amazon-apigateway-integration:
+                type: 'aws_proxy'
+                httpMethod: 'POST'
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActionsFunction.Arn}/invocations'
+          /r/{pageId}:
+            get:
+              operationId: 'viewResults'
+              summary: 'View resource search results page (public, no API key)'
+              parameters:
+                - name: pageId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+              responses:
+                '302':
+                  description: 'Redirect to results page'
+                '404':
+                  description: 'Link expired'
               x-amazon-apigateway-integration:
                 type: 'aws_proxy'
                 httpMethod: 'POST'
@@ -385,7 +456,7 @@ Resources:
           /resources/search:
             post:
               operationId: 'resourceLookup'
-              summary: 'Search for community resources via 211 directory'
+              summary: 'Search for community resources'
               security:
                 - api_key: []
               requestBody:
@@ -399,16 +470,8 @@ Resources:
                       properties:
                         keyword:
                           type: 'string'
-                        county:
+                        zipCode:
                           type: 'string'
-                        city:
-                          type: 'string'
-                        zip_code:
-                          type: 'string'
-                        state:
-                          type: 'string'
-                        max_results:
-                          type: 'integer'
               responses:
                 '200':
                   description: 'Resource search results'
@@ -444,7 +507,7 @@ Resources:
     Type: AWS::ApiGateway::ApiKey
     Properties:
       Name: !Sub '${AWS::StackName}-api-key'
-      Description: 'API Key for Stability360 Actions (2 MCP Tools)'
+      Description: 'API Key for Stability360 Actions'
       Enabled: true
       GenerateDistinctId: true
 
@@ -820,14 +883,14 @@ Resources:
     Condition: CreateMcpGateway
     Properties:
       Name: !Sub '${AWS::StackName}-mcp-gw'
-      Description: 'Stability360 Actions MCP Gateway — 2 action tools'
+      Description: 'Stability360 Actions MCP Gateway — resource lookup with auto-scoring'
       ProtocolType: MCP
       ProtocolConfiguration:
         Mcp:
           Instructions: >
-            Use this gateway to access Stability360 action tools:
-            scoringCalculate for Self-Sufficiency Matrix scoring and
-            resourceLookup for searching community resources via SC 211.
+            Use this gateway to access the Stability360 resourceLookup tool
+            for searching community resources. Scoring runs
+            automatically when housing/income/employment fields are included.
           SupportedVersions:
             - '2025-03-26'
       AuthorizerType: !If [IntegrateWithConnect, CUSTOM_JWT, AWS_IAM]
@@ -849,13 +912,13 @@ Resources:
 # =======================================================
 
 Outputs:
+  ActionsApiId:
+    Description: 'REST API ID'
+    Value: !Ref ActionsApi
+
   ActionsApiUrl:
     Description: 'Base URL of the Actions API'
     Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
-
-  ScoringEndpoint:
-    Description: 'POST endpoint for scoring calculator'
-    Value: !Sub 'https://${ActionsApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/scoring/calculate'
 
   ResourcesSearchEndpoint:
     Description: 'POST endpoint for community resource search'
@@ -903,3 +966,4 @@ Outputs:
     Description: 'MCP Gateway ID'
     Value: !GetAtt AgentCoreGateway.GatewayIdentifier
     Condition: CreateMcpGateway
+

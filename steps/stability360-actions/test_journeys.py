@@ -465,7 +465,7 @@ def journey_07_out_of_area(qc, cfg):
                         'berkeley', 'charleston', 'dorchester']),
          'No out-of-area message found'),
         ('Directed to 211',
-         has_any(full, ['211', 'sc211', '2-1-1']),
+         has_any(full, ['211', '2-1-1']),
          'No 211 referral found for out-of-area client'),
         ('Intake stopped (no further questions after ZIP rejection)',
          not has_any(full, ['contact method', 'phone call, text, or email',

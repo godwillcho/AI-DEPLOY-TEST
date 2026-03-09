@@ -1,32 +1,16 @@
 openapi: "3.0.3"
 info:
   title: "Stability360 Actions API"
-  description: >
-    API for Stability360 action tools: Self-Sufficiency Matrix scoring and
-    community resource lookup via SC 211 directory.
-    Two POST endpoints backed by a single Lambda function.
-  version: "2.0.0"
+  version: "4.0.0"
 
 servers:
   - url: "${API_GATEWAY_URL}"
-    description: "API Gateway endpoint"
 
 paths:
-  /scoring/calculate:
+  /intake/helper:
     post:
-      operationId: scoringCalculate
-      summary: "Calculate Self-Sufficiency Matrix scores"
-      description: >
-        Computes housing stability, employment stability, and financial
-        resilience scores (1-5 each), a composite score, priority flag,
-        and recommended service path.  Use this tool after collecting
-        housing, income, and employment data from the client to determine
-        their recommended service path.  The tool performs exact mathematical
-        scoring — do not attempt to calculate scores yourself.
-        IMPORTANT: You MUST include instance_id (from system variable instanceId),
-        contact_id (from system variable contactId), and ALL collected client data
-        (firstName, lastName, zipCode, county, age, employer, etc.) in every call.
-        These are required for saving contact attributes.
+      operationId: intakeHelper
+      summary: "Validate ZIP, get required fields, or check partner affiliation"
       requestBody:
         required: true
         content:
@@ -34,208 +18,63 @@ paths:
             schema:
               type: object
               required:
-                - housing_situation
-                - monthly_income
-                - monthly_housing_cost
-                - employment_status
+                - action
               properties:
-                housing_situation:
+                action:
                   type: string
-                  description: "Housing situation category"
                   enum:
-                    - homeless
-                    - shelter
-                    - couch_surfing
-                    - temporary
-                    - transitional
-                    - renting_unstable
-                    - renting_month_to_month
-                    - renting_stable
-                    - owner_with_mortgage
-                    - owner
-                    - owner_no_mortgage
-                monthly_income:
-                  type: number
-                  description: "Gross monthly income in USD"
-                  minimum: 0
-                monthly_housing_cost:
-                  type: number
-                  description: "Monthly housing cost (rent or mortgage) in USD"
-                  minimum: 0
-                housing_challenges:
-                  type: array
-                  items:
-                    type: string
-                    enum:
-                      - past_due
-                      - overcrowded
-                      - unsafe
-                      - no_utilities
-                      - eviction_notice
-                      - shutoff_notice
-                  description: "Current housing challenges"
-                employment_status:
+                    - classifyNeed
+                    - validateZip
+                    - getRequiredFields
+                    - checkPartner
+                    - getNextSteps
+                    - recordDisposition
+                need:
                   type: string
-                  description: "Employment situation"
-                  enum:
-                    - unable_to_work
-                    - unemployed
-                    - gig_work
-                    - seasonal
-                    - part_time
-                    - full_time_below_standard
-                    - self_employed
-                    - student
-                    - retired
-                    - full_time
-                    - full_time_above_standard
-                has_benefits:
-                  type: boolean
-                  description: "Whether the person has employer-provided benefits"
-                  default: false
-                monthly_expenses:
-                  type: number
-                  description: "Total monthly expenses in USD"
-                  minimum: 0
-                savings_rate:
-                  type: number
-                  description: "Savings rate as decimal (0.03 = 3%)"
-                  minimum: 0
-                  maximum: 1
-                fico_range:
-                  type: string
-                  description: "FICO credit score range"
-                  enum:
-                    - below_580
-                    - "580-669"
-                    - "670-739"
-                    - "740-799"
-                    - "800+"
-                    - unknown
-                instance_id:
-                  type: string
-                  description: "REQUIRED. Use the instanceId value from system_variables. Must be included in every call."
-                contact_id:
-                  type: string
-                  description: "REQUIRED. Use the contactId value from system_variables. Must be included in every call."
-                firstName:
-                  type: string
-                  description: "Client first name if collected"
-                lastName:
-                  type: string
-                  description: "Client last name if collected"
                 zipCode:
                   type: string
-                  description: "Client ZIP code if collected"
-                contactMethod:
+                category:
                   type: string
-                  description: "Preferred contact method if collected"
-                phoneNumber:
-                  type: string
-                  description: "Client phone number if collected"
-                emailAddress:
-                  type: string
-                  description: "Client email if collected"
                 employer:
                   type: string
-                  description: "Employer name if collected"
-                age:
+                hasResults:
+                  type: boolean
+                disposition:
                   type: string
-                  description: "Client age if collected"
-                hasChildrenUnder18:
+                  description: "Call outcome: live_transfer, callback, additional_search, self_service, out_of_area, declined, emergency"
+                instance_id:
                   type: string
-                  description: "Whether client has children under 18"
-                militaryAffiliation:
+                contact_id:
                   type: string
-                  description: "Military affiliation if collected"
-                publicAssistance:
+                firstName:
                   type: string
-                  description: "Public assistance programs if collected"
+                lastName:
+                  type: string
+                keyword:
+                  type: string
+                  description: "Need category (e.g. food, utilities, shelter)"
+                contactMethod:
+                  type: string
+                contactInfo:
+                  type: string
+                employmentStatus:
+                  type: string
                 preferredDays:
                   type: string
-                  description: "Preferred days for callback if collected"
+                  description: "Preferred days for callback"
                 preferredTimes:
                   type: string
-                  description: "Preferred times for callback if collected"
-                county:
-                  type: string
-                  description: "Client county if collected"
-                needCategory:
-                  type: string
-                  description: "Primary need category"
-                needSubcategory:
-                  type: string
-                  description: "Need subcategory if collected"
-                path:
-                  type: string
-                  description: "Intake path (referral or direct_support)"
-                escalationRoute:
-                  type: string
-                  description: "Routing decision"
-                partnerEmployee:
-                  type: string
-                  description: "Whether client is a Thrive@Work partner employee"
-                partnerEmployer:
-                  type: string
-                  description: "Partner employer name if detected"
-                priorityFlag:
-                  type: string
-                  description: "Priority flag (e.g. urgent for shutoff)"
+                  description: "Preferred times for callback"
       responses:
         "200":
-          description: "Scoring results"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  record_id:
-                    type: string
-                    description: "Unique ID for this scoring record"
-                  housing_score:
-                    type: number
-                    description: "Housing stability score (1-5)"
-                  employment_score:
-                    type: number
-                    description: "Employment stability score (1-5)"
-                  financial_resilience_score:
-                    type: number
-                    description: "Financial resilience score (1-5)"
-                  composite_score:
-                    type: number
-                    description: "Average of all 3 domain scores"
-                  priority_flag:
-                    type: boolean
-                    description: "True if any domain score is 1 or critical trigger present"
-                  recommended_path:
-                    type: string
-                    description: "Recommended service path"
-                    enum:
-                      - direct_support
-                      - mixed
-                      - referral
-                  scoring_details:
-                    type: object
-                    description: "Detailed breakdown of each domain score"
+          description: "OK"
       security:
         - apiKeyAuth: []
 
   /resources/search:
     post:
       operationId: resourceLookup
-      summary: "Search for community resources via 211 directory"
-      description: >
-        Searches the SC 211 community resource directory for services matching
-        a keyword and location.  Returns provider name, description, address,
-        phone, URL, eligibility, and fees.  Use this tool when a client needs
-        community resource referrals (food, utilities, housing, healthcare, etc.)
-        in their area.  The keyword should describe the type of help needed.
-        Include county and/or zip_code for more relevant results.
-        IMPORTANT: You MUST include instance_id (from system variable instanceId),
-        contact_id (from system variable contactId), and ALL collected client data
-        (firstName, lastName, zipCode, county, age, employer, needCategory, path,
-        escalationRoute, etc.) in every call. These are required for saving
-        contact attributes.
+      summary: "Search community resources by keyword and location. Include ALL collected client data as extra fields."
       requestBody:
         required: true
         content:
@@ -247,159 +86,43 @@ paths:
               properties:
                 keyword:
                   type: string
-                  description: "Search keyword describing the type of help needed (e.g., 'food assistance', 'utility bill help', 'housing')"
-                county:
-                  type: string
-                  description: "County to search in (e.g., Berkeley, Charleston, Dorchester)"
-                city:
-                  type: string
-                  description: "City to narrow results"
-                zip_code:
-                  type: string
-                  description: "ZIP code to narrow results"
-                state:
-                  type: string
-                  description: "State (defaults to South Carolina)"
-                  default: "South Carolina"
-                max_results:
-                  type: integer
-                  description: "Maximum number of results to return (1-20)"
-                  minimum: 1
-                  maximum: 20
-                  default: 10
-                instance_id:
-                  type: string
-                  description: "REQUIRED. Use the instanceId value from system_variables. Must be included in every call."
-                contact_id:
-                  type: string
-                  description: "REQUIRED. Use the contactId value from system_variables. Must be included in every call."
-                firstName:
-                  type: string
-                  description: "Client first name if collected"
-                lastName:
-                  type: string
-                  description: "Client last name if collected"
+                  description: "Specific search term (e.g. 'food pantry', 'electric bill')"
                 zipCode:
                   type: string
-                  description: "Client ZIP code if collected"
+                instance_id:
+                  type: string
+                contact_id:
+                  type: string
+                firstName:
+                  type: string
+                lastName:
+                  type: string
                 contactMethod:
                   type: string
-                  description: "Preferred contact method if collected"
-                phoneNumber:
+                  description: "phone or email"
+                contactInfo:
                   type: string
-                  description: "Client phone number if collected"
-                emailAddress:
-                  type: string
-                  description: "Client email if collected"
+                  description: "Phone number or email address"
                 employmentStatus:
                   type: string
-                  description: "Employment status if collected"
                 employer:
                   type: string
-                  description: "Employer name if collected"
                 age:
                   type: string
-                  description: "Client age if collected"
-                hasChildrenUnder18:
+                  description: "Only collect for utilities, rental, or financial categories"
+                childrenUnder18:
                   type: string
-                  description: "Whether client has children under 18"
-                militaryAffiliation:
+                  description: "Only collect for utilities, rental, or financial categories"
+                monthlyIncome:
                   type: string
-                  description: "Military affiliation if collected"
-                publicAssistance:
+                  description: "Only collect for utilities, rental, or financial categories"
+                housingSituation:
                   type: string
-                  description: "Public assistance programs if collected"
-                preferredDays:
-                  type: string
-                  description: "Preferred days for callback if collected"
-                preferredTimes:
-                  type: string
-                  description: "Preferred times for callback if collected"
-                needCategory:
-                  type: string
-                  description: "Primary need category"
-                needSubcategory:
-                  type: string
-                  description: "Need subcategory"
-                path:
-                  type: string
-                  description: "Intake path (referral or direct_support)"
-                escalationRoute:
-                  type: string
-                  description: "Routing decision"
-                partnerEmployee:
-                  type: string
-                  description: "Whether client is a Thrive@Work partner employee"
-                partnerEmployer:
-                  type: string
-                  description: "Partner employer name if detected"
-                priorityFlag:
-                  type: string
-                  description: "Priority flag (e.g. urgent for shutoff)"
+                  description: "Only collect for utilities, rental, or financial categories"
+              additionalProperties: true
       responses:
         "200":
-          description: "Resource search results"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  found:
-                    type: boolean
-                    description: "Whether any matching resources were found"
-                  results:
-                    type: array
-                    description: "List of matching community resources"
-                    items:
-                      type: object
-                      properties:
-                        service_name:
-                          type: string
-                          description: "Name of the service"
-                        organization:
-                          type: string
-                          description: "Organization providing the service"
-                        description:
-                          type: string
-                          description: "Description of the service"
-                        address:
-                          type: string
-                          description: "Physical address"
-                        phones:
-                          type: array
-                          items:
-                            type: string
-                          description: "Phone numbers"
-                        url:
-                          type: string
-                          description: "Website URL"
-                        eligibility:
-                          type: string
-                          description: "Eligibility requirements"
-                        fees:
-                          type: string
-                          description: "Fee information"
-                        distance_miles:
-                          type: number
-                          description: "Distance from user ZIP code in miles (only when ZIP provided)"
-                  total_count:
-                    type: integer
-                    description: "Total number of matching resources in the directory"
-                  showing:
-                    type: integer
-                    description: "Number of results returned in this response"
-                  sorted_by:
-                    type: string
-                    description: "How results are ordered — proximity (nearest first when ZIP provided) or relevance"
-                    enum:
-                      - proximity
-                      - relevance
-                  message:
-                    type: string
-                    description: "Summary message about the search results"
-                  source:
-                    type: string
-                    description: "Data source identifier"
+          description: "OK"
       security:
         - apiKeyAuth: []
 

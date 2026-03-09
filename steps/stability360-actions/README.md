@@ -117,7 +117,7 @@ All attributes are stored as string key-value pairs on the Amazon Connect contac
 | Tool | Endpoint | Description |
 |------|----------|-------------|
 | `scoringCalculate` | `POST /scoring/calculate` | Computes housing, employment, and financial resilience scores (1-5 each), composite score, priority flag, and recommended path |
-| `resourceLookup` | `POST /resources/search` | Queries SC 211 (Sophia API) for community resources by keyword, county, city, or ZIP |
+| `resourceLookup` | `POST /resources/search` | Queries the Sophia community resource API for resources by keyword, county, city, or ZIP |
 
 ## Deployment
 

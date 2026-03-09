@@ -371,6 +371,9 @@ def handle_disposition_automation(body, result):
     profile_id = find_or_create_customer_profile(body)
     if profile_id:
         extra_attrs['customerProfileId'] = profile_id
+        extra_attrs['profileCreated'] = 'true'
+    else:
+        extra_attrs['profileCreated'] = 'false'
 
     # 2. Task (callback only)
     if disposition == 'callback':
@@ -387,6 +390,9 @@ def handle_disposition_automation(body, result):
     case_id = create_case(body, instance_id, contact_id, profile_id)
     if case_id:
         extra_attrs['caseId'] = case_id
+        extra_attrs['caseCreated'] = 'true'
+    else:
+        extra_attrs['caseCreated'] = 'false'
 
     # Save extra attributes to the original contact
     if extra_attrs:

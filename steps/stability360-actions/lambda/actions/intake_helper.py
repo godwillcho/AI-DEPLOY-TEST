@@ -14,6 +14,7 @@ Moves deterministic logic out of the AI prompt to reduce prompt size.
 
 import logging
 
+from partner_employers import PARTNER_EMPLOYERS, EMPLOYER_CORRECTIONS
 from queue_checker import check_queue_availability
 
 logger = logging.getLogger('intake_helper')
@@ -72,31 +73,7 @@ ROUTE_D_CATEGORIES = {
 # Partner employers (case-insensitive matching)
 # ---------------------------------------------------------------------------
 
-PARTNER_EMPLOYERS = {
-    'amazon': 'Amazon',
-    'boeing': 'Boeing',
-    'volvo': 'Volvo',
-    'bosch': 'Bosch',
-    'blackbaud': 'Blackbaud',
-    'musc': 'MUSC',
-    'medical university': 'MUSC',
-    'roper': 'Roper St. Francis',
-    'trident health': 'Trident Health',
-}
-
-# Common misspellings → correct name
-EMPLOYER_CORRECTIONS = {
-    'amazona': 'Amazon',
-    'amazom': 'Amazon',
-    'amozon': 'Amazon',
-    'boieng': 'Boeing',
-    'boeng': 'Boeing',
-    'boing': 'Boeing',
-    'volve': 'Volvo',
-    'volvio': 'Volvo',
-    'blackbad': 'Blackbaud',
-    'blackbuad': 'Blackbaud',
-}
+# PARTNER_EMPLOYERS and EMPLOYER_CORRECTIONS imported from partner_employers.py
 
 
 # ---------------------------------------------------------------------------
@@ -383,45 +360,34 @@ def _get_next_steps(body):
     availability = check_queue_availability(instance_id or None)
     agents_available = availability.get('is_available', False)
 
-    if has_results:
-        if agents_available:
-            options = [
-                '1. Speak with someone now about these resources',
-                '2. Schedule a callback at a time that works for you',
-                '3. Search for something else',
-            ]
-        else:
-            options = [
-                '1. Schedule a callback — our team will reach out to you',
-                '2. Search for something else',
-            ]
-        return {
-            'options': options,
-            'agentsAvailable': agents_available,
-            'message': (
-                'Present these options to the caller. '
-                'After they choose, call intakeHelper(action=recordDisposition, disposition=their_choice).'
-            ),
-        }
-
-    if agents_available:
-        options = [
-            '1. Connect with our team who may know other options',
-            '2. Try a different search',
-        ]
-    else:
-        options = [
-            '1. Schedule a callback — our team will look into this for you',
-            '2. Try a different search',
-        ]
-    return {
-        'options': options,
+    result = {
+        'hasResults': has_results,
         'agentsAvailable': agents_available,
-        'message': (
-            'No results found. Present these options. '
-            'After they choose, call intakeHelper(action=recordDisposition, disposition=their_choice).'
-        ),
+        'canOfferLiveTransfer': agents_available,
+        'canOfferCallback': True,
+        'canOfferAdditionalSearch': True,
     }
+
+    if has_results:
+        result['message'] = (
+            'Resources were found. Conversationally ask the caller what they would like to do next. '
+            'You may offer: callback (always available)'
+            + (', speaking with someone now (agents are available)' if agents_available else '')
+            + ', or searching for something else. '
+            'Do NOT offer to speak with someone if agentsAvailable is false. '
+            'Keep it natural — do not list numbered options.'
+        )
+    else:
+        result['message'] = (
+            'No resources were found for this search. Let the caller know gently, then ask what they would like to do. '
+            'You may offer: callback (always available)'
+            + (', connecting with the team (agents are available)' if agents_available else '')
+            + ', or trying a different search. '
+            'Do NOT offer to speak with someone if agentsAvailable is false. '
+            'Keep it natural — do not list numbered options.'
+        )
+
+    return result
 
 
 # Valid disposition values

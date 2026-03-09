@@ -2,266 +2,225 @@
 
 AI-powered support agent (Aria) for Trident United Way, built on Amazon Connect Q with MCP Gateway tools.
 
-## Session Attributes Reference
+## Architecture
 
-All attributes are stored as string key-value pairs on the Amazon Connect contact. The contact flow uses these for case creation, profile management, routing, and follow-up scheduling after the AI conversation ends.
+```
+Caller → Amazon Connect → Q Connect AI Agent (Aria)
+                              ↓
+                        MCP Gateway → API Gateway → Lambda
+                              ↓
+                   ┌──────────┴──────────┐
+                   │                     │
+             intakeHelper          resourceLookup
+           (6 actions)           (Sophia API search)
+                   │
+     ┌─────────────┼─────────────┐
+     │             │             │
+  Customer      Task          Case
+  Profile     (callback)    (callback/
+                             transfer)
+```
 
-### Core Attributes (from intake)
+**Post-disposition automation** runs silently when a caller chooses callback or live transfer:
+1. **Customer Profile** — find or create by phone (E.164), email, or name
+2. **Task** (callback only) — routed to BasicQueue with all intake data
+3. **Case** — linked to contact and customer profile
 
-| Attribute | Description | Example | Collected When |
-|-----------|-------------|---------|----------------|
-| `firstName` | Client's first name | `Maria` | Direct Support intake |
-| `lastName` | Client's last name | `Johnson` | Direct Support intake |
-| `zipCode` | Client's ZIP code | `29401` | Both paths |
-| `county` | Derived from ZIP or asked directly | `Charleston` | Both paths |
-| `contactMethod` | Preferred contact method | `phone_call`, `text`, `email` | Both paths |
-| `phoneNumber` | Phone in E.164 format (no dashes) | `+18435551234` | If contact method is call or text |
-| `emailAddress` | Client's email address | `maria@example.com` | If contact method is email |
-| `preferredDays` | Days available for contact | `Monday through Wednesday` | Direct Support intake |
-| `preferredTimes` | Time of day preference | `Mornings` | Direct Support intake |
-
-### Need Attributes
-
-| Attribute | Description | Example | Collected When |
-|-----------|-------------|---------|----------------|
-| `needCategory` | Primary need category (1 of 11) | `Housing` | Both paths |
-| `needSubcategory` | Specific subcategory | `Utilities` | Both paths |
-| `path` | Intake path determined by subcategory | `referral`, `direct_support` | Both paths |
-
-### Need-Specific Attributes (only if relevant questions were asked)
-
-| Attribute | Description | Example | Collected When |
-|-----------|-------------|---------|----------------|
-| `age` | Client's age | `34` | Housing, Health, Legal Aid |
-| `hasChildrenUnder18` | Children under 18 at home | `true`, `false` | Housing, Food, Child Care, Financial Literacy |
-| `employmentStatus` | Current employment status | `part_time`, `unemployed`, `full_time`, `retired`, etc. | Housing, Transportation, Food, Health, Child Care, Disaster, Employment/Education, Financial Literacy |
-| `employer` | Employer name (if employed) | `Walmart` | If employed full-time or part-time |
-| `militaryAffiliation` | Military or service affiliation | `veteran`, `active_duty`, `none` | Housing, Health, Employment/Education, Legal Aid |
-| `publicAssistance` | Public benefits received | `SNAP, Medicaid` | Housing, Food, Health, Child Care, Transportation, Disaster, Financial Literacy |
-
-### Scoring Inputs (Direct Support path only)
-
-| Attribute | Description | Example | Collected When |
-|-----------|-------------|---------|----------------|
-| `housingSituation` | Current housing situation | `renting_month_to_month`, `homeless`, `owner`, etc. | Before calling scoringCalculate |
-| `monthlyIncome` | Monthly household income | `1800` | Before calling scoringCalculate |
-| `monthlyHousingCost` | Monthly rent/mortgage cost | `950` | Before calling scoringCalculate |
-| `scoringEmploymentStatus` | Employment for scoring (if not already captured) | `part_time` | Before calling scoringCalculate (skipped if Q-EMPLOYMENT already answered) |
-
-#### Valid `housingSituation` values
-
-| Value | Base Score |
-|-------|-----------|
-| `homeless` | 1 |
-| `shelter` | 1 |
-| `couch_surfing` | 2 |
-| `temporary` | 2 |
-| `transitional` | 2 |
-| `renting_unstable` | 3 |
-| `renting_month_to_month` | 3 |
-| `renting_stable` | 4 |
-| `owner_with_mortgage` | 4 |
-| `owner` / `owner_no_mortgage` | 5 |
-
-#### Valid `employmentStatus` values
-
-| Value | Base Score |
-|-------|-----------|
-| `unable_to_work` | 1 |
-| `unemployed` | 1 |
-| `gig_work` | 2 |
-| `seasonal` | 2 |
-| `part_time` | 3 |
-| `full_time_below_standard` | 3 |
-| `self_employed` | 3 |
-| `student` | 3 |
-| `retired` | 4 |
-| `full_time` | 4 |
-| `full_time_above_standard` | 5 |
-
-### Scoring Results (Direct Support path only, from scoringCalculate response)
-
-| Attribute | Description | Example |
-|-----------|-------------|---------|
-| `housingScore` | Housing stability score (1-5) | `1` |
-| `employmentScore` | Employment stability score (1-5) | `2` |
-| `financialResilienceScore` | Financial resilience score (1-5) | `2` |
-| `compositeScore` | Average of 3 domain scores | `1.67` |
-| `priorityFlag` | Urgent priority indicator | `true`, `false`, `urgent` |
-| `recommendedPath` | Scoring-based path recommendation | `direct_support`, `mixed`, `referral` |
-
-### Partner Attributes (only if employer is a Thrive@Work partner)
-
-| Attribute | Description | Example |
-|-----------|-------------|---------|
-| `partnerEmployee` | Whether client works for a partner employer | `true` |
-| `partnerEmployer` | Name of the partner employer | `Boeing` |
-
-### Eligibility Flags (noted during intake based on answers)
-
-| Attribute | Description | Trigger |
-|-----------|-------------|---------|
-| `eligibleBCDCOG` | Eligible for BCDCOG services | Age 65+ |
-| `eligibleSiemer` | Eligible for Siemer / Rental Reserve | Children under 18 |
-| `eligibleMissionUnited` | Eligible for Mission United / veteran services | Veteran or active duty |
-| `eligibleBarriersToEmployment` | Eligible for Barriers to Employment program | Looking for work |
-
-### Routing Attributes
-
-| Attribute | Description | Values |
-|-----------|-------------|--------|
-| `escalationRoute` | How the contact should be routed after the AI conversation | `live_agent` (transfer now), `callback` (team member follows up later) |
+The task contact flow includes a `GetCustomerProfile` block so the profile auto-resolves in the agent workspace when a callback task is accepted.
 
 ## MCP Tools
 
 | Tool | Endpoint | Description |
 |------|----------|-------------|
-| `scoringCalculate` | `POST /scoring/calculate` | Computes housing, employment, and financial resilience scores (1-5 each), composite score, priority flag, and recommended path |
-| `resourceLookup` | `POST /resources/search` | Queries the Sophia community resource API for resources by keyword, county, city, or ZIP |
+| `intakeHelper` | `POST /intake/helper` | 6 actions: validateZip, classifyNeed, getRequiredFields, checkPartner, getNextSteps, recordDisposition |
+| `resourceLookup` | `POST /resources/search` | Queries Sophia community resource API by keyword, county, city, or ZIP |
+
+## Lambda Modules
+
+| Module | Purpose |
+|--------|---------|
+| `index.py` | Main handler — routes to intakeHelper or resourceLookup |
+| `intake_helper.py` | ZIP validation, need classification, field requirements, partner check, disposition recording |
+| `queue_checker.py` | Real-time agent availability via GetCurrentMetricData |
+| `task_manager.py` | Customer profile, task, and case creation |
+| `scoring_calculator.py` | Housing/employment/financial stability scoring (1-5) |
+| `sophia_resource_lookup.py` | Sophia API integration with proximity sorting |
 
 ## Deployment
 
-### Full Deploy (everything)
+### Prerequisites
 
-Deploys the entire stack end-to-end: CloudFormation (Lambda, API Gateway, IAM roles, log groups), Lambda code, OpenAPI spec, MCP Gateway + Target, AI Agent with orchestration prompt, and Connect wiring.
+- AWS CLI configured with appropriate credentials
+- Python 3.9+, boto3
+- Amazon Connect instance with:
+  - Q Connect assistant configured
+  - Customer Profiles domain enabled
+  - Cases domain enabled
+  - BasicQueue created
+
+### Full Deploy (new environment)
+
+Deploys everything end-to-end: CFN stack, Lambda, API Gateway, MCP Gateway, AI Agent, Connect wiring, task resources.
 
 ```bash
 python deploy.py \
   --stack-name stability360-actions-dev \
   --region us-west-2 \
   --environment dev \
-  --enable-mcp \
   --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d
 ```
 
-**What it deploys:**
+For production:
+
+```bash
+python deploy.py \
+  --stack-name stability360-actions-prod \
+  --region us-east-1 \
+  --environment prod \
+  --connect-instance-id 9b50ddcc-8510-441e-a9c8-96e9e9281105
+```
+
+**Deployment steps (14 total):**
 
 | Step | What | Description |
 |------|------|-------------|
-| 1 | CloudFormation Stack | Lambda function, API Gateway, IAM roles, CloudWatch log groups |
-| 2 | Lambda Code | Zips and uploads `scoring_calculator.py` + `sophia_resource_lookup.py` |
-| 3 | OpenAPI Spec | Uploads `actions-spec.yaml` to API Gateway for MCP tool definitions |
-| 4 | MCP Gateway + Target | Creates AgentCore MCP gateway pointing at the API Gateway |
-| 5 | AI Agent | Creates/updates the Q Connect agent with orchestration prompt |
-| 6 | Connect Wiring | Attaches the agent to the Amazon Connect assistant as SelfService orchestrator |
+| 1 | CloudFormation Stack | Lambda, API Gateway, IAM roles, DynamoDB, S3, MCP Gateway, CloudWatch |
+| 2 | Stack Outputs | Retrieve resource IDs and URLs |
+| 3 | Lambda Code | Zip and upload all modules |
+| 4 | API Gateway Redeploy | Activate inline OpenAPI Body changes |
+| 5 | OpenAPI Spec | Upload `actions-spec.yaml` to S3 for MCP tool definitions |
+| 6 | API Key Credential | Register API key with Bedrock AgentCore token vault |
+| 7 | MCP Target | Create/update REST API target on MCP Gateway |
+| 8 | Gateway Audience | Set OIDC discovery URL for Connect instance |
+| 9 | Connect Registration | Register MCP app with Connect via App Integrations |
+| 10 | Security Profile | Create/update profile with MCP tool permissions |
+| 11 | Orchestration Prompt | Create/update AI prompt from `orchestration-prompt.txt` |
+| 12 | AI Agent | Create/update Q Connect agent with tools and prompt |
+| 13 | Tool Config | Generate `ai-agent-tool-config.json` reference file |
+| 14 | Task Resources | BasicQueue lookup, task flow, task template, profiles/cases domains, case template, Lambda env vars |
 
-### Partial Deploys (for faster iteration)
+### Partial Deploys (faster iteration)
 
 ```bash
-# Update Lambda code only (skips CFN, MCP, prompt, Connect wiring)
+# Lambda code only
 python deploy.py --update-code-only \
-  --stack-name stability360-actions-dev \
-  --region us-west-2
+  --stack-name stability360-actions-dev --region us-west-2
 
-# Update orchestration prompt only (skips everything else)
+# Orchestration prompt only
 python deploy.py --update-prompt \
-  --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d \
-  --stack-name stability360-actions-dev \
-  --region us-west-2
+  --stack-name stability360-actions-dev --region us-west-2 \
+  --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d
 
-# Update Connect wiring only (re-attach agent to assistant)
+# MCP + Connect + task resources (skip CFN/Lambda)
 python deploy.py --connect-only \
-  --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d \
-  --stack-name stability360-actions-dev \
-  --region us-west-2
+  --stack-name stability360-actions-dev --region us-west-2 \
+  --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d
 ```
 
 ### Teardown
 
-Deletes the CloudFormation stack, MCP gateway, AI agent, and Connect wiring.
+Full cleanup: AI agent, prompt, security profile, Connect integration, MCP gateway/target, API key credential, task template, task flow (archived), case template (deactivated), CFN stack.
 
 ```bash
 python deploy.py --teardown \
-  --stack-name stability360-actions-dev \
-  --region us-west-2
+  --stack-name stability360-actions-dev --region us-west-2 \
+  --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d
 ```
 
-### CLI Flags Reference
+### CLI Flags
 
 | Flag | Description |
 |------|-------------|
-| `--stack-name` | CloudFormation stack name (default: `stability360-actions-dev`) |
+| `--stack-name` | CloudFormation stack name (default: `stability360-actions`) |
 | `--region` | AWS region (default: `us-west-2`) |
-| `--environment` | Environment tag: `dev` or `prod` |
-| `--enable-mcp` | Enable MCP Gateway creation (required for full deploy) |
-| `--connect-instance-id` | Amazon Connect instance ID (required for agent + prompt) |
+| `--environment` | Environment tag: `dev`, `staging`, or `prod` |
+| `--connect-instance-id` | Amazon Connect instance ID (enables all Connect steps) |
+| `--enable-mcp` | Enable MCP Gateway (auto-enabled with `--connect-instance-id`) |
 | `--update-code-only` | Only update Lambda function code |
 | `--update-prompt` | Only update the orchestration prompt |
-| `--connect-only` | Only re-wire the agent to Connect |
-| `--openapi-spec-url` | Override OpenAPI spec URL (auto-detected by default) |
+| `--connect-only` | Skip CFN/Lambda, do MCP (5-7) + Connect (8-14) steps |
+| `--set-default` | Set the AI agent as default orchestration agent |
 | `--model-id` | Override the AI model for orchestration |
-| `--teardown` | Delete all deployed resources |
-| `--delete` | Alias for `--teardown` |
-| `--delete-security-profile` | Also delete the security profile during teardown |
+| `--openapi-spec-url` | Override OpenAPI spec URL (auto-detected by default) |
+| `--teardown` | Full teardown of all resources |
+| `--delete` | Delete CFN stack only |
+| `--delete-security-profile` | Also delete security profile during teardown |
+
+## Session Attributes Reference
+
+All attributes are stored as string key-value pairs on the Amazon Connect contact.
+
+### Core Intake Attributes
+
+| Attribute | Description | Example |
+|-----------|-------------|---------|
+| `firstName` | Client's first name | `Maria` |
+| `lastName` | Client's last name | `Johnson` |
+| `zipCode` | Client's ZIP code | `29401` |
+| `contactMethod` | Preferred contact method | `phone`, `email` |
+| `contactInfo` | Phone number or email | `8435551234` |
+| `employmentStatus` | Employment status | `part_time`, `unemployed`, `full_time` |
+| `employer` | Employer name | `Boeing` |
+| `preferredDays` | Days available for callback | `Monday through Wednesday` |
+| `preferredTimes` | Time of day preference | `Mornings` |
+
+### Disposition Automation Attributes
+
+| Attribute | Description | Set When |
+|-----------|-------------|----------|
+| `customerProfileId` | Customer Profiles profile ID | callback, live_transfer |
+| `taskCreated` | Whether callback task was created | callback (`true`/`false`) |
+| `taskContactId` | Task contact ID in Connect | callback (if created) |
+| `caseId` | Cases case ID | callback, live_transfer |
+
+### Scoring Attributes (Direct Support path)
+
+| Attribute | Description | Example |
+|-----------|-------------|---------|
+| `housingScore` | Housing stability score (1-5) | `2` |
+| `employmentScore` | Employment stability score (1-5) | `3` |
+| `financialResilienceScore` | Financial resilience score (1-5) | `2` |
+| `compositeScore` | Average of 3 domain scores | `2.33` |
+| `priorityFlag` | Urgent priority indicator | `true`, `false` |
+| `scoringSummary` | Human-readable summary | `Housing: 2, Employment: 3, Financial: 2` |
+
+### Partner Attributes
+
+| Attribute | Description | Example |
+|-----------|-------------|---------|
+| `partnerEmployee` | Works for a Thrive@Work partner | `true` |
 
 ## Testing
 
 ### Test resourceLookup (API Gateway)
 
-Call the API directly with curl:
-
 ```bash
-curl -X POST https://s4wng4ghnd.execute-api.us-west-2.amazonaws.com/dev/resources/search \
+curl -X POST https://<API_URL>/resources/search \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: <API_KEY>" \
   -d '{"keyword": "food", "county": "Charleston", "zip_code": "29401"}'
 ```
 
-Try different keywords:
+Keywords: `food`, `rent`, `utilities`, `shelter`, `dental`, `transportation`, `legal`, `childcare`, `jobs`
 
-| Keyword | What it searches |
-|---------|-----------------|
-| `food` | Food pantries, distributions |
-| `rent` | Rental assistance |
-| `utilities` | Utility bill help |
-| `shelter` | Emergency shelters |
-| `dental` | Dental clinics |
-| `transportation` | Bus, ride-sharing |
-| `legal` | Legal aid services |
-| `childcare` | Child care programs |
-| `jobs` | Employment services |
+### Test ZIP Codes (service area validation)
 
-### Test scoringCalculate (API Gateway)
-
-```bash
-curl -X POST https://s4wng4ghnd.execute-api.us-west-2.amazonaws.com/dev/scoring/calculate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "housing_situation": "renting_month_to_month",
-    "monthly_income": 1800,
-    "monthly_housing_cost": 950,
-    "employment_status": "part_time",
-    "has_benefits": false,
-    "monthly_expenses": 1600,
-    "savings_rate": 0,
-    "fico_range": "unknown"
-  }'
-```
-
-Expected response includes: `housing_score`, `employment_score`, `financial_resilience_score`, `composite_score`, `priority_flag`, `recommended_path`.
-
-### Test ZIP Codes (for service area validation)
-
-| ZIP | County | In Service Area? |
-|-----|--------|-----------------|
+| ZIP | County | In Area? |
+|-----|--------|----------|
 | `29401` | Charleston | Yes |
-| `29403` | Charleston | Yes |
-| `29464` | Charleston (Mt. Pleasant) | Yes |
-| `29485` | Dorchester (Summerville) | Yes |
-| `29445` | Berkeley (Goose Creek) | Yes |
-| `29466` | Berkeley (Mt. Pleasant) | Yes |
-| `29910` | Beaufort | No (out of area) |
-| `29201` | Richland (Columbia) | No (out of area) |
+| `29464` | Mt. Pleasant | Yes |
+| `29485` | Summerville | Yes |
+| `29445` | Goose Creek | Yes |
+| `29910` | Beaufort | No |
+| `29201` | Columbia | No |
 
 ### Test via AI Agent (Connect Console)
 
-Open the Amazon Connect console → Q in Connect → Test chat, then try these conversations:
+Open Amazon Connect console → Q in Connect → Test chat:
 
-**Quick test — resourceLookup (no consent needed):**
-> "What food banks are in Charleston?"
-- Aria should call resourceLookup directly, no consent or intake questions.
+- **Resource search:** "What food banks are in Charleston?"
+- **Callback flow:** "I need help with my electric bill" → complete intake → choose callback
+- **Direct-to-agent:** "I'd like to speak with someone" → minimal intake → transfer/callback
+- **Emergency:** "I'm going to hurt myself" → emergency protocol
 
-**Quick test — scoringCalculate (full Direct Support flow):**
-> "I need help with my electric bill"
-- Aria confirms need → asks consent → collects full intake (name, ZIP, contact, days, times, age, children, employment, military, assistance) → collects scoring data (housing situation, income, housing cost) → calls scoringCalculate → offers to connect with team member.
-
-**Full test journeys are documented in [test_customer_journeys.md](test_customer_journeys.md)** — 13 journeys covering all paths, consent flows, and edge cases.
+Full test journeys: [test_customer_journeys.md](test_customer_journeys.md)

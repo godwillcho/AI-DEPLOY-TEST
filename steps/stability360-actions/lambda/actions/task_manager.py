@@ -293,10 +293,26 @@ def create_case(body, instance_id, contact_id, profile_id=None, result=None):
                 'value': {'stringValue': profile_arn},
             })
 
-        # Populate custom case fields from body + result
+        # Populate custom case fields from contact attributes + body + result
         if CASE_FIELD_MAP:
-            # Merge body and result — body has intake fields, result has scoring/disposition
+            # Fetch all contact attributes saved by earlier tool calls
+            # (scoring, partner detection, eligibility flags, etc.)
+            contact_attrs = {}
+            if instance_id and contact_id:
+                try:
+                    connect_client = boto3.client('connect', region_name=CONNECT_REGION)
+                    resp = connect_client.get_contact_attributes(
+                        InstanceId=instance_id,
+                        InitialContactId=contact_id,
+                    )
+                    contact_attrs = resp.get('Attributes', {})
+                    logger.info('Fetched %d contact attributes for case', len(contact_attrs))
+                except Exception:
+                    logger.warning('Could not fetch contact attributes for case', exc_info=True)
+
+            # Merge: contact attrs (base) → body (override) → result (override)
             merged = {}
+            merged.update(contact_attrs)
             merged.update(body)
             # Map result keys to body keys used by CASE_FIELD_MAP
             if result.get('disposition'):

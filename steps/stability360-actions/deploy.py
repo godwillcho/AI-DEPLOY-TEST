@@ -1818,6 +1818,24 @@ def create_or_find_case_fields(cases_client, domain_id):
                 )
                 field_id = resp['fieldId']
                 logger.info('  Case field created: %s -> %s', display_name, field_id)
+            except cases_client.exceptions.ConflictException:
+                # Field already exists but wasn't in list_fields — look it up
+                logger.info('  Case field conflict (already exists): %s — looking up ID...', display_name)
+                try:
+                    resp = cases_client.list_fields(domainId=domain_id, maxResults=100)
+                    found = False
+                    for f in resp.get('fields', []):
+                        if f['name'] == display_name:
+                            field_id = f['fieldId']
+                            logger.info('  Case field found: %s -> %s', display_name, field_id)
+                            found = True
+                            break
+                    if not found:
+                        logger.warning('  Could not find field %s after conflict', display_name)
+                        continue
+                except Exception as e2:
+                    logger.warning('  Could not look up field %s: %s', display_name, e2)
+                    continue
             except Exception as e:
                 logger.warning('  Could not create case field %s: %s', display_name, e)
                 continue

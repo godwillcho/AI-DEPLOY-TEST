@@ -12,7 +12,9 @@ Caller → Amazon Connect → Q Connect AI Agent (Aria)
                    ┌──────────┴──────────┐
                    │                     │
              intakeHelper          resourceLookup
-           (6 actions)           (Sophia API search)
+           (2 actions)           (Sophia API search +
+                                  auto-scoring + partner
+                                  detection)
                    │
      ┌─────────────┼─────────────┐
      │             │             │
@@ -32,19 +34,39 @@ The task contact flow includes a `GetCustomerProfile` block so the profile auto-
 
 | Tool | Endpoint | Description |
 |------|----------|-------------|
-| `intakeHelper` | `POST /intake/helper` | 6 actions: validateZip, classifyNeed, getRequiredFields, checkPartner, getNextSteps, recordDisposition |
-| `resourceLookup` | `POST /resources/search` | Queries Sophia community resource API by keyword, county, city, or ZIP |
+| `intakeHelper` | `POST /intake/helper` | 2 actions: getNextSteps (conversational next step guidance), recordDisposition (callback/transfer/self-resolved) |
+| `resourceLookup` | `POST /resources/search` | Queries Sophia community resource API by keyword, county, city, or ZIP. Auto-triggers stability scoring and partner employer detection. |
 
 ## Lambda Modules
 
 | Module | Purpose |
 |--------|---------|
-| `index.py` | Main handler — routes to intakeHelper or resourceLookup |
-| `intake_helper.py` | ZIP validation, need classification, field requirements, partner check, disposition recording |
+| `index.py` | Main handler — routes requests to intakeHelper or resourceLookup |
+| `config.py` | Shared config, constants, E.164 phone normalization (`normalize_phone`) |
+| `intake_helper.py` | 2 actions: getNextSteps (next conversational step), recordDisposition |
+| `auto_scoring.py` | Auto-triggers stability scoring + Thrive@Work partner detection after resource search |
+| `scoring_calculator.py` | Housing/employment/financial stability scoring (1-5 scale) |
+| `partner_employers.py` | Thrive@Work partner employer list + fuzzy matching + misspelling correction |
+| `contact_attributes.py` | Contact attribute persistence after every tool call + eligibility flag derivation |
+| `profile_lookup.py` | Returning caller profile lookup (read-only, searches by phone/email/name) |
 | `queue_checker.py` | Real-time agent availability via GetCurrentMetricData |
-| `task_manager.py` | Customer profile, task, and case creation |
-| `scoring_calculator.py` | Housing/employment/financial stability scoring (1-5) |
 | `sophia_resource_lookup.py` | Sophia API integration with proximity sorting |
+| `task_manager.py` | Customer profile, task, and case creation (post-disposition) |
+
+## KB Seed Data
+
+Knowledge base documents are stored in `seed-data/kb-documents/` and uploaded to the Q Connect KB S3 bucket via `--update-kb`:
+
+| Directory | Document | Purpose |
+|-----------|----------|---------|
+| `classify-need/` | `need-categories.txt` | 14 need categories with keywords + emergency detection |
+| `validate-zip/` | `service-area-zips.txt` | Tri-county ZIP codes (Charleston, Berkeley, Dorchester) |
+| `check-partner/` | `partner-employers.txt` | Thrive@Work partner employer list + matching rules |
+| `thriveatwork/` | Program documents | Thrive@Work program reference material |
+
+The AI agent uses KB Retrieve to look up ZIP validation, need classification, and partner matching at runtime.
+
+**Intake field rules** (Route R vs Route D, consent, field ordering) are embedded directly in the orchestration prompt for reliability — not in the KB.
 
 ## Deployment
 
@@ -63,21 +85,31 @@ The task contact flow includes a `GetCustomerProfile` block so the profile auto-
 Deploys everything end-to-end: CFN stack, Lambda, API Gateway, MCP Gateway, AI Agent, Connect wiring, task resources.
 
 ```bash
+cd steps/stability360-actions
+
+# Dev environment (us-west-2)
 python deploy.py \
   --stack-name stability360-actions-dev \
   --region us-west-2 \
   --environment dev \
   --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d
-```
 
-For production:
-
-```bash
+# Prod environment (us-east-1)
 python deploy.py \
   --stack-name stability360-actions-prod \
   --region us-east-1 \
   --environment prod \
   --connect-instance-id 9b50ddcc-8510-441e-a9c8-96e9e9281105
+```
+
+For a different AWS account, set `AWS_PROFILE` before running:
+
+```bash
+AWS_PROFILE=other-account python deploy.py \
+  --stack-name stability360-actions-prod \
+  --region us-east-1 \
+  --environment prod \
+  --connect-instance-id <INSTANCE_ID>
 ```
 
 **Deployment steps (14 total):**
@@ -94,6 +126,7 @@ python deploy.py \
 | 8 | Gateway Audience | Set OIDC discovery URL for Connect instance |
 | 9 | Connect Registration | Register MCP app with Connect via App Integrations |
 | 10 | Security Profile | Create/update profile with MCP tool permissions |
+| 10b | KB Seed Data | Upload seed data documents to Q Connect KB S3 bucket |
 | 11 | Orchestration Prompt | Create/update AI prompt from `orchestration-prompt.txt` |
 | 12 | AI Agent | Create/update Q Connect agent with tools and prompt |
 | 13 | Tool Config | Generate `ai-agent-tool-config.json` reference file |
@@ -108,6 +141,11 @@ python deploy.py --update-code-only \
 
 # Orchestration prompt only
 python deploy.py --update-prompt \
+  --stack-name stability360-actions-dev --region us-west-2 \
+  --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d
+
+# KB seed data only (uploads to S3 bucket backing the Q Connect KB)
+python deploy.py --update-kb \
   --stack-name stability360-actions-dev --region us-west-2 \
   --connect-instance-id e75a053a-60c7-45f3-83f7-a24df6d3b52d
 
@@ -138,6 +176,7 @@ python deploy.py --teardown \
 | `--enable-mcp` | Enable MCP Gateway (auto-enabled with `--connect-instance-id`) |
 | `--update-code-only` | Only update Lambda function code |
 | `--update-prompt` | Only update the orchestration prompt |
+| `--update-kb` | Upload KB seed data documents to the Q Connect KB S3 bucket |
 | `--connect-only` | Skip CFN/Lambda, do MCP (5-7) + Connect (8-14) steps |
 | `--set-default` | Set the AI agent as default orchestration agent |
 | `--model-id` | Override the AI model for orchestration |
@@ -148,7 +187,7 @@ python deploy.py --teardown \
 
 ## Session Attributes Reference
 
-All attributes are stored as string key-value pairs on the Amazon Connect contact.
+All attributes are stored as string key-value pairs on the Amazon Connect contact. Phone numbers are auto-normalized to E.164 format (`+1XXXXXXXXXX`).
 
 ### Core Intake Attributes
 
@@ -157,8 +196,9 @@ All attributes are stored as string key-value pairs on the Amazon Connect contac
 | `firstName` | Client's first name | `Maria` |
 | `lastName` | Client's last name | `Johnson` |
 | `zipCode` | Client's ZIP code | `29401` |
+| `phoneNumber` | Client's phone number (E.164) | `+18435551234` |
 | `contactMethod` | Preferred contact method | `phone`, `email` |
-| `contactInfo` | Phone number or email | `8435551234` |
+| `contactInfo` | Phone (E.164) or email | `+18435551234`, `maria@email.com` |
 | `employmentStatus` | Employment status | `part_time`, `unemployed`, `full_time` |
 | `employer` | Employer name | `Boeing` |
 | `preferredDays` | Days available for callback | `Monday through Wednesday` |

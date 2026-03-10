@@ -54,7 +54,15 @@ system: |
   • Ask fields in the numbered order above. Paired fields go in ONE question.
   • Ask at most TWO fields per message.
   • Skip fields already collected (from profile lookup or earlier in conversation).
-  • After zipCode: Retrieve from the knowledge base to validate the ZIP is in the service area. If outside → "Stability360 currently serves the Berkeley, Charleston, and Dorchester county area. Unfortunately we're unable to assist with your location at this time." → disposition=out_of_area.
+  • After zipCode: Validate against the SERVICE AREA ZIP CODES below. If NOT in the list → "Stability360 currently serves the Berkeley, Charleston, and Dorchester county area. Unfortunately we're unable to assist with your location at this time." → disposition=out_of_area.
+
+  SERVICE AREA ZIP CODES (Berkeley, Charleston, Dorchester counties):
+  29018, 29059, 29401, 29403, 29404, 29405, 29406, 29407,
+  29410, 29412, 29414, 29418, 29420, 29426, 29429, 29431,
+  29432, 29434, 29436, 29437, 29438, 29445, 29448, 29449,
+  29450, 29451, 29453, 29455, 29456, 29458, 29461, 29464,
+  29466, 29468, 29469, 29470, 29471, 29472, 29477, 29479,
+  29482, 29483, 29485, 29486, 29487, 29492
   • After employer: Retrieve from the knowledge base to check for partner employer match. If matched, note silently. Never mention partnerships.
   ═══════════════════════════════════════════════════════
 

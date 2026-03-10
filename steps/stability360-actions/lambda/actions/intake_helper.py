@@ -11,7 +11,7 @@ are handled by the AI agent via KB Retrieve (knowledge base documents).
 
 import logging
 
-from partner_employers import PARTNER_EMPLOYERS, EMPLOYER_CORRECTIONS
+from partner_employers import PARTNER_EMPLOYERS, EMPLOYER_CORRECTIONS, detect_partner_attributes
 from queue_checker import check_queue_availability
 
 logger = logging.getLogger('intake_helper')
@@ -439,6 +439,14 @@ def _record_disposition(body):
             if alias in disposition:
                 resolved = key
                 break
+
+    # Auto-detect partner employer and merge into body for contact attribute saving
+    employer = body.get('employer', '').strip()
+    if employer:
+        partner_attrs = detect_partner_attributes(employer)
+        if partner_attrs:
+            body.update(partner_attrs)
+            logger.info('Partner detected at disposition: %s', partner_attrs)
 
     # If live_transfer or emergency: verify agents are available
     if resolved in ('live_transfer', 'emergency'):

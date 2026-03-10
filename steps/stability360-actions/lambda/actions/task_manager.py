@@ -307,13 +307,14 @@ def create_case(body, instance_id, contact_id, profile_id=None, result=None):
             # needCategory may come as 'keyword'
             if not merged.get('needCategory') and merged.get('keyword'):
                 merged['needCategory'] = merged['keyword']
-            # phoneNumber from contactInfo if contactMethod is phone
-            if not merged.get('phoneNumber'):
-                cm = str(merged.get('contactMethod', '')).strip().lower()
-                ci = merged.get('contactInfo', '').strip()
-                if cm in ('phone', 'both') and ci:
-                    merged['phoneNumber'] = normalize_phone(ci)
-            elif merged.get('phoneNumber'):
+            # Normalize phone numbers to E.164
+            cm = str(merged.get('contactMethod', '')).strip().lower()
+            ci = merged.get('contactInfo', '').strip()
+            if cm in ('phone', 'both') and ci:
+                merged['contactInfo'] = normalize_phone(ci)
+                if not merged.get('phoneNumber'):
+                    merged['phoneNumber'] = merged['contactInfo']
+            if merged.get('phoneNumber'):
                 merged['phoneNumber'] = normalize_phone(merged['phoneNumber'])
 
             for body_key, field_id in CASE_FIELD_MAP.items():

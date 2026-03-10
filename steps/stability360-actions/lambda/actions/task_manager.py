@@ -52,6 +52,27 @@ UUID_RE = re.compile(
 # ---------------------------------------------------------------------------
 
 
+def _fetch_contact_attributes(instance_id, contact_id):
+    """Fetch all contact attributes from the original contact.
+
+    Returns a dict of attribute key-value pairs, or empty dict on failure.
+    """
+    if not instance_id or not contact_id:
+        return {}
+    try:
+        connect_client = boto3.client('connect', region_name=CONNECT_REGION)
+        resp = connect_client.get_contact_attributes(
+            InstanceId=instance_id,
+            InitialContactId=contact_id,
+        )
+        attrs = resp.get('Attributes', {})
+        logger.info('Fetched %d contact attributes', len(attrs))
+        return attrs
+    except Exception:
+        logger.warning('Could not fetch contact attributes', exc_info=True)
+        return {}
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -176,41 +197,81 @@ def create_callback_task(body, instance_id, contact_id, profile_id=None):
         logger.warning('TASK_CONTACT_FLOW_ID not set — cannot create task.')
         return None
 
-    first_name = body.get('firstName', '').strip() or 'Unknown'
-    last_name = body.get('lastName', '').strip() or 'Caller'
-    need_category = (
-        body.get('keyword', '') or body.get('needCategory', '') or 'General'
-    )
+    # Fetch all contact attributes from the original contact
+    contact_attrs = _fetch_contact_attributes(instance_id, contact_id)
+
+    # Merge: contact attrs (base) → body (override)
+    merged = {}
+    merged.update(contact_attrs)
+    merged.update(body)
+    if not merged.get('needCategory') and merged.get('keyword'):
+        merged['needCategory'] = merged['keyword']
+
+    first_name = merged.get('firstName', '').strip() or 'Unknown'
+    last_name = merged.get('lastName', '').strip() or 'Caller'
+    need_category = merged.get('needCategory', '') or 'General'
 
     task_name = f'Callback: {first_name} {last_name} — {need_category}'[:512]
 
+    # Build description from all available data
     description_parts = [
         f'Callback requested by {first_name} {last_name}',
         f'Need: {need_category}',
     ]
     for label, key in [
         ('ZIP', 'zipCode'), ('Contact', 'contactInfo'),
+        ('Phone', 'phoneNumber'), ('Email', 'emailAddress'),
+        ('Age', 'age'), ('Children Under 18', 'hasChildrenUnder18'),
         ('Employment', 'employmentStatus'), ('Employer', 'employer'),
+        ('Monthly Income', 'monthlyIncome'),
+        ('Housing', 'housingSituation'),
+        ('Military', 'militaryAffiliation'),
+        ('Public Assistance', 'publicAssistance'),
+        ('Partner Employee', 'partnerEmployee'),
+        ('Partner Employer', 'partnerEmployer'),
         ('Scoring', 'scoringSummary'),
-        ('Preferred days', 'preferredDays'), ('Preferred times', 'preferredTimes'),
+        ('Composite Score', 'compositeScore'),
+        ('Priority Flag', 'priorityFlag'),
+        ('Recommended Path', 'recommendedPath'),
+        ('Preferred days', 'preferredDays'),
+        ('Preferred times', 'preferredTimes'),
     ]:
-        val = body.get(key, '').strip()
+        val = str(merged.get(key, '')).strip()
         if val:
             description_parts.append(f'{label}: {val}')
     task_description = '\n'.join(description_parts)[:4096]
 
-    # Build references (task template fields)
+    # Build references from all available data
     references = {}
     for key in [
         'firstName', 'lastName', 'needCategory', 'zipCode',
-        'contactMethod', 'contactInfo', 'employmentStatus', 'employer',
-        'partnerEmployee', 'scoringSummary', 'preferredDays', 'preferredTimes',
+        'contactMethod', 'contactInfo', 'phoneNumber', 'emailAddress',
+        'age', 'hasChildrenUnder18',
+        'employmentStatus', 'employer',
+        'monthlyIncome', 'housingSituation',
+        'militaryAffiliation', 'publicAssistance',
+        'partnerEmployee', 'partnerEmployer',
+        'housingScore', 'housingLabel',
+        'employmentScore', 'employmentLabel',
+        'financialResilienceScore', 'financialLabel',
+        'compositeScore', 'compositeLabel',
+        'priorityFlag', 'recommendedPath',
+        'scoringSummary',
+        'preferredDays', 'preferredTimes',
+        'eligibleBCDCOG', 'eligibleSiemer',
+        'eligibleMissionUnited', 'eligibleBarriersToEmployment',
     ]:
-        val = body.get(key, '')
-        if key == 'needCategory':
-            val = need_category
+        val = str(merged.get(key, '')).strip()
         if val:
-            references[key] = {'Value': str(val)[:4096], 'Type': 'STRING'}
+            references[key] = {'Value': val[:4096], 'Type': 'STRING'}
+
+    # Pass all contact attributes to the task so they're available in agent workspace
+    task_attributes = dict(contact_attrs)
+    task_attributes.update({k: str(v).strip() for k, v in body.items()
+                            if v is not None and str(v).strip()
+                            and k not in ('instance_id', 'contact_id', 'action')})
+    if profile_id:
+        task_attributes['customerProfileId'] = profile_id
 
     try:
         connect_client = boto3.client('connect', region_name=CONNECT_REGION)
@@ -223,14 +284,11 @@ def create_callback_task(body, instance_id, contact_id, profile_id=None):
         }
         if references:
             task_kwargs['References'] = references
-        # Pass profile ID as contact attribute so the task flow can resolve it
-        if profile_id:
-            task_kwargs['Attributes'] = {'customerProfileId': profile_id}
+        if task_attributes:
+            task_kwargs['Attributes'] = task_attributes
         if TASK_TEMPLATE_ID:
-            # Template already has ContactFlowId — don't pass both
             task_kwargs['TaskTemplateId'] = TASK_TEMPLATE_ID
         else:
-            # No template — use the flow directly
             task_kwargs['ContactFlowId'] = TASK_CONTACT_FLOW_ID
 
         resp = connect_client.start_task_contact(**task_kwargs)
@@ -295,20 +353,7 @@ def create_case(body, instance_id, contact_id, profile_id=None, result=None):
 
         # Populate custom case fields from contact attributes + body + result
         if CASE_FIELD_MAP:
-            # Fetch all contact attributes saved by earlier tool calls
-            # (scoring, partner detection, eligibility flags, etc.)
-            contact_attrs = {}
-            if instance_id and contact_id:
-                try:
-                    connect_client = boto3.client('connect', region_name=CONNECT_REGION)
-                    resp = connect_client.get_contact_attributes(
-                        InstanceId=instance_id,
-                        InitialContactId=contact_id,
-                    )
-                    contact_attrs = resp.get('Attributes', {})
-                    logger.info('Fetched %d contact attributes for case', len(contact_attrs))
-                except Exception:
-                    logger.warning('Could not fetch contact attributes for case', exc_info=True)
+            contact_attrs = _fetch_contact_attributes(instance_id, contact_id)
 
             # Merge: contact attrs (base) → body (override) → result (override)
             merged = {}

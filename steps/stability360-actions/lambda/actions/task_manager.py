@@ -34,6 +34,13 @@ CASE_TEMPLATE_ID = os.environ.get('CASE_TEMPLATE_ID', '')
 CONNECT_REGION = os.environ.get('CONNECT_REGION', os.environ.get('AWS_REGION', 'us-west-2'))
 CONNECT_INSTANCE_ID = os.environ.get('CONNECT_INSTANCE_ID', '')
 
+# Case field map: body_key -> case field UUID (set by deploy.py)
+_raw_field_map = os.environ.get('CASE_FIELD_MAP', '{}')
+try:
+    CASE_FIELD_MAP = json.loads(_raw_field_map)
+except (json.JSONDecodeError, TypeError):
+    CASE_FIELD_MAP = {}
+
 UUID_RE = re.compile(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
     re.IGNORECASE,
@@ -241,7 +248,7 @@ def create_callback_task(body, instance_id, contact_id, profile_id=None):
 # ---------------------------------------------------------------------------
 
 
-def create_case(body, instance_id, contact_id, profile_id=None):
+def create_case(body, instance_id, contact_id, profile_id=None, result=None):
     """Create a Connect Case linked to the contact and customer profile.
 
     Returns case_id or None. Silent — caller never knows.
@@ -251,6 +258,7 @@ def create_case(body, instance_id, contact_id, profile_id=None):
         logger.info('CONNECT_CASES_DOMAIN_ID not set — skipping case creation.')
         return None
 
+    result = result or {}
     first_name = body.get('firstName', '').strip() or 'Unknown'
     last_name = body.get('lastName', '').strip() or 'Caller'
     need_category = (
@@ -284,6 +292,39 @@ def create_case(body, instance_id, contact_id, profile_id=None):
                 'id': 'customer_id',
                 'value': {'stringValue': profile_arn},
             })
+
+        # Populate custom case fields from body + result
+        if CASE_FIELD_MAP:
+            # Merge body and result — body has intake fields, result has scoring/disposition
+            merged = {}
+            merged.update(body)
+            # Map result keys to body keys used by CASE_FIELD_MAP
+            if result.get('disposition'):
+                merged['callDisposition'] = result['disposition']
+            for rkey in ('compositeScore', 'compositeLabel', 'priorityFlag', 'recommendedPath'):
+                if result.get(rkey):
+                    merged[rkey] = result[rkey]
+            # needCategory may come as 'keyword'
+            if not merged.get('needCategory') and merged.get('keyword'):
+                merged['needCategory'] = merged['keyword']
+            # phoneNumber from contactInfo if contactMethod is phone
+            if not merged.get('phoneNumber'):
+                cm = str(merged.get('contactMethod', '')).strip().lower()
+                ci = merged.get('contactInfo', '').strip()
+                if cm in ('phone', 'both') and ci:
+                    merged['phoneNumber'] = normalize_phone(ci)
+            elif merged.get('phoneNumber'):
+                merged['phoneNumber'] = normalize_phone(merged['phoneNumber'])
+
+            for body_key, field_id in CASE_FIELD_MAP.items():
+                val = merged.get(body_key)
+                if val is not None and str(val).strip():
+                    fields.append({
+                        'id': field_id,
+                        'value': {'stringValue': str(val).strip()[:500]},
+                    })
+
+            logger.info('Case fields populated: %d custom fields', len(fields) - 1)
 
         case_kwargs = {
             'domainId': domain_id,
@@ -383,7 +424,7 @@ def handle_disposition_automation(body, result):
 
     # 3. Case (both callback and live_transfer) — linked to contact + profile
     logger.info('Disposition automation: creating case...')
-    case_id = create_case(body, instance_id, contact_id, profile_id)
+    case_id = create_case(body, instance_id, contact_id, profile_id, result=result)
     if case_id:
         extra_attrs['caseId'] = case_id
         extra_attrs['caseCreated'] = 'true'

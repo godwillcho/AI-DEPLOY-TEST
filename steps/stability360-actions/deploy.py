@@ -1752,6 +1752,80 @@ def create_or_find_case_template(cases_client, domain_id):
         return None
 
 
+# Case fields: (human-readable name, body_key to pull value from)
+CASE_CUSTOM_FIELDS = [
+    ('First Name', 'firstName'),
+    ('Last Name', 'lastName'),
+    ('ZIP Code', 'zipCode'),
+    ('Phone Number', 'phoneNumber'),
+    ('Email Address', 'emailAddress'),
+    ('Contact Method', 'contactMethod'),
+    ('Need Category', 'needCategory'),
+    ('Age', 'age'),
+    ('Children Under 18', 'hasChildrenUnder18'),
+    ('Employment Status', 'employmentStatus'),
+    ('Employer', 'employer'),
+    ('Monthly Income', 'monthlyIncome'),
+    ('Housing Situation', 'housingSituation'),
+    ('Military Affiliation', 'militaryAffiliation'),
+    ('Public Assistance', 'publicAssistance'),
+    ('Partner Employee', 'partnerEmployee'),
+    ('Partner Employer', 'partnerEmployer'),
+    ('Composite Score', 'compositeScore'),
+    ('Composite Label', 'compositeLabel'),
+    ('Priority Flag', 'priorityFlag'),
+    ('Recommended Path', 'recommendedPath'),
+    ('Call Disposition', 'callDisposition'),
+    ('Preferred Days', 'preferredDays'),
+    ('Preferred Times', 'preferredTimes'),
+]
+
+
+def create_or_find_case_fields(cases_client, domain_id):
+    """Create custom case fields on the domain if they don't exist.
+
+    Returns dict mapping body_key -> field_id.
+    """
+    # List existing fields to avoid duplicates
+    existing = {}
+    try:
+        paginator_token = None
+        while True:
+            kwargs = {'domainId': domain_id, 'maxResults': 100}
+            if paginator_token:
+                kwargs['nextToken'] = paginator_token
+            resp = cases_client.list_fields(**kwargs)
+            for f in resp.get('fields', []):
+                existing[f['name']] = f['fieldId']
+            paginator_token = resp.get('nextToken')
+            if not paginator_token:
+                break
+    except Exception as e:
+        logger.warning('Could not list case fields: %s', e)
+
+    field_map = {}  # body_key -> field_id
+    for display_name, body_key in CASE_CUSTOM_FIELDS:
+        if display_name in existing:
+            field_id = existing[display_name]
+            logger.info('  Case field exists: %s -> %s', display_name, field_id)
+        else:
+            try:
+                resp = cases_client.create_field(
+                    domainId=domain_id,
+                    name=display_name,
+                    type='Text',
+                    description=f'Stability360 intake field: {body_key}',
+                )
+                field_id = resp['fieldId']
+                logger.info('  Case field created: %s -> %s', display_name, field_id)
+            except Exception as e:
+                logger.warning('  Could not create case field %s: %s', display_name, e)
+                continue
+        field_map[body_key] = field_id
+
+    return field_map
+
+
 def update_lambda_env_vars(lambda_client, function_name, new_vars):
     """Merge new environment variables into the Lambda function's existing config."""
     try:
@@ -1823,7 +1897,7 @@ def deploy_task_resources(session, connect_instance_id, lambda_function_name, re
     else:
         logger.warning('Cases domain not found.')
 
-    # 5b. Case template
+    # 5b. Case template + custom fields
     if cases_domain_id:
         logger.info('')
         logger.info('--- Task Resources: Create case template ---')
@@ -1831,6 +1905,13 @@ def deploy_task_resources(session, connect_instance_id, lambda_function_name, re
         case_template_id = create_or_find_case_template(cases_client, cases_domain_id)
         if case_template_id:
             new_env['CASE_TEMPLATE_ID'] = case_template_id
+
+        logger.info('')
+        logger.info('--- Task Resources: Create/find case fields ---')
+        case_field_map = create_or_find_case_fields(cases_client, cases_domain_id)
+        if case_field_map:
+            new_env['CASE_FIELD_MAP'] = json.dumps(case_field_map)
+            logger.info('Case field map: %d fields', len(case_field_map))
 
     # Store Connect instance ID for Lambda runtime
     new_env['CONNECT_INSTANCE_ID'] = connect_instance_id

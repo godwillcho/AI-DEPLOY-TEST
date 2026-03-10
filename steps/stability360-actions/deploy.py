@@ -53,6 +53,7 @@ logging.getLogger('urllib3').setLevel(logging.WARNING)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_FILE = os.path.join(SCRIPT_DIR, 'stability360-actions-stack.yaml')
 LAMBDA_CODE_DIR = os.path.join(SCRIPT_DIR, 'lambda', 'actions')
+CASE_UPDATER_CODE_DIR = os.path.join(SCRIPT_DIR, 'lambda', 'case-updater')
 OPENAPI_SPEC_TEMPLATE = os.path.join(SCRIPT_DIR, 'openapi', 'actions-spec.yaml')
 ORCHESTRATION_PROMPT_FILE = os.path.join(SCRIPT_DIR, 'prompts', 'orchestration-prompt.txt')
 KB_SEED_DATA_DIR = os.path.join(SCRIPT_DIR, 'seed-data', 'kb-documents')
@@ -1967,10 +1968,12 @@ def update_lambda_env_vars(lambda_client, function_name, new_vars):
         logger.warning('Could not update Lambda env vars: %s', e)
 
 
-def deploy_task_resources(session, connect_instance_id, lambda_function_name, region):
+def deploy_task_resources(session, connect_instance_id, lambda_function_name, region,
+                          case_updater_function_name='', case_updater_function_arn=''):
     """Deploy task template, task flow, and look up profiles/cases domains.
 
     Updates Lambda env vars with the new resource IDs.
+    Also configures the case-updater Lambda and associates it with Connect.
     """
     connect_client = session.client('connect')
     lambda_client = session.client('lambda')
@@ -2024,6 +2027,7 @@ def deploy_task_resources(session, connect_instance_id, lambda_function_name, re
         logger.warning('Cases domain not found.')
 
     # 5b. Case template + custom fields
+    case_field_map = {}
     if cases_domain_id:
         logger.info('')
         logger.info('--- Task Resources: Create case template ---')
@@ -2057,6 +2061,35 @@ def deploy_task_resources(session, connect_instance_id, lambda_function_name, re
         logger.info('--- Task Resources: Update Lambda env vars ---')
         time.sleep(5)  # Wait for any prior Lambda updates to settle
         update_lambda_env_vars(lambda_client, lambda_function_name, new_env)
+
+    # 7. Case updater Lambda — set env vars + associate with Connect
+    if case_updater_function_name:
+        logger.info('')
+        logger.info('--- Task Resources: Configure case-updater Lambda ---')
+        updater_env = {}
+        if cases_domain_id:
+            updater_env['CONNECT_CASES_DOMAIN_ID'] = cases_domain_id
+        if case_field_map:
+            updater_env['CASE_FIELD_MAP'] = json.dumps(case_field_map)
+        updater_env['CONNECT_REGION'] = region
+        if updater_env:
+            time.sleep(5)
+            update_lambda_env_vars(lambda_client, case_updater_function_name, updater_env)
+
+        # Associate with Connect instance so it's available in contact flows
+        if case_updater_function_arn:
+            logger.info('Associating case-updater Lambda with Connect instance...')
+            try:
+                connect_client.associate_lambda_function(
+                    InstanceId=connect_instance_id,
+                    FunctionArn=case_updater_function_arn,
+                )
+                logger.info('Case-updater Lambda associated with Connect instance.')
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ResourceConflictException':
+                    logger.info('Case-updater Lambda already associated with Connect instance.')
+                else:
+                    logger.warning('Could not associate case-updater Lambda: %s', e)
 
     return new_env
 
@@ -2127,6 +2160,9 @@ def main():
         outputs = get_stack_outputs(cf_client, args.stack_name)
         lambda_client = session.client('lambda')
         update_lambda_code(lambda_client, outputs['ActionsFunctionName'], LAMBDA_CODE_DIR)
+        case_updater_name = outputs.get('CaseUpdaterFunctionName', '')
+        if case_updater_name:
+            update_lambda_code(lambda_client, case_updater_name, CASE_UPDATER_CODE_DIR)
         return
 
     # --- Update prompt only ---
@@ -2185,9 +2221,16 @@ def main():
                 connect_instance_url = f'https://{args.connect_instance_id}.my.connect.aws'
         except Exception:
             connect_instance_url = f'https://{args.connect_instance_id}.my.connect.aws'
-        logger.info('Connect-only mode: skipping CFN/Lambda/KB steps')
+        logger.info('Connect-only mode: skipping CFN/Lambda steps')
         logger.info('API URL:     %s', api_url)
         logger.info('Gateway:     %s', gateway_id)
+
+        # Update case-updater Lambda code (if it exists)
+        case_updater_name = outputs.get('CaseUpdaterFunctionName', '')
+        if case_updater_name:
+            lambda_client = session.client('lambda')
+            update_lambda_code(lambda_client, case_updater_name, CASE_UPDATER_CODE_DIR)
+
         # Jump to MCP steps (5-7) + Connect steps (8-13)
         agentcore_client = session.client('bedrock-agentcore-control')
         logger.info('')
@@ -2282,6 +2325,8 @@ def main():
         if actions_function:
             deploy_task_resources(
                 session, args.connect_instance_id, actions_function, args.region,
+                case_updater_function_name=outputs.get('CaseUpdaterFunctionName', ''),
+                case_updater_function_arn=outputs.get('CaseUpdaterFunctionArn', ''),
             )
 
         logger.info('')
@@ -2379,6 +2424,9 @@ def main():
     logger.info('--- Step 3: Update Lambda code ---')
     lambda_client = session.client('lambda')
     update_lambda_code(lambda_client, actions_function, LAMBDA_CODE_DIR)
+    case_updater_name = outputs.get('CaseUpdaterFunctionName', '')
+    if case_updater_name:
+        update_lambda_code(lambda_client, case_updater_name, CASE_UPDATER_CODE_DIR)
 
     # --- MCP Steps (5-7) ---
     if args.enable_mcp or args.connect_instance_id:
@@ -2496,6 +2544,8 @@ def main():
         logger.info('--- Step 14: Deploy task resources ---')
         deploy_task_resources(
             session, args.connect_instance_id, actions_function, args.region,
+            case_updater_function_name=outputs.get('CaseUpdaterFunctionName', ''),
+            case_updater_function_arn=outputs.get('CaseUpdaterFunctionArn', ''),
         )
 
     # --- Summary ---

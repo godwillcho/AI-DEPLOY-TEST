@@ -93,6 +93,13 @@ Resources:
       RetentionInDays: 7
     DeletionPolicy: Delete
 
+  CaseUpdaterLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-case-updater'
+      RetentionInDays: 7
+    DeletionPolicy: Delete
+
   # =======================================================
   # DynamoDB — Actions Table (scoring, submissions, follow-ups)
   # =======================================================
@@ -382,6 +389,78 @@ Resources:
                   })
               }
     DeletionPolicy: Delete
+
+  # =======================================================
+  # Case Updater Lambda — Updates case fields from contact attributes
+  # Invoked by Amazon Connect contact flow after Q Connect session
+  # =======================================================
+
+  CaseUpdaterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub '${CaseUpdaterLogGroup.Arn}:*'
+        - PolicyName: ConnectCasesAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cases:UpdateCase
+                  - cases:GetCase
+                Resource: '*'
+    DeletionPolicy: Delete
+
+  CaseUpdaterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-case-updater'
+      Runtime: python3.13
+      Handler: index.handler
+      Role: !GetAtt CaseUpdaterRole.Arn
+      Timeout: 15
+      MemorySize: 128
+      LoggingConfig:
+        LogGroup: !Ref CaseUpdaterLogGroup
+        LogFormat: JSON
+      Environment:
+        Variables:
+          CONNECT_CASES_DOMAIN_ID: ''
+          CASE_FIELD_MAP: '{}'
+          CONNECT_REGION: !Ref AWS::Region
+          LOG_LEVEL: INFO
+      Code:
+        ZipFile: |
+          import json
+          def handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'result': 'placeholder - deploy real code using deploy.py'
+              }
+    DeletionPolicy: Delete
+
+  CaseUpdaterConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CaseUpdaterFunction
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
 
   # =======================================================
   # API Gateway — Inline OpenAPI Body (hotel template pattern)
@@ -935,6 +1014,14 @@ Outputs:
   ActionsFunctionArn:
     Description: 'Lambda function ARN'
     Value: !GetAtt ActionsFunction.Arn
+
+  CaseUpdaterFunctionName:
+    Description: 'Case updater Lambda function name'
+    Value: !Ref CaseUpdaterFunction
+
+  CaseUpdaterFunctionArn:
+    Description: 'Case updater Lambda function ARN'
+    Value: !GetAtt CaseUpdaterFunction.Arn
 
   ActionsApiKeyId:
     Description: 'API Key ID'

@@ -1,0 +1,16 @@
+Stability360 Service Area ZIP Codes
+Berkeley, Charleston, and Dorchester Counties — South Carolina
+
+VALID ZIP CODES (tri-county service area):
+29018, 29059, 29401, 29403, 29404, 29405, 29406, 29407,
+29410, 29412, 29414, 29418, 29420, 29426, 29429, 29431,
+29432, 29434, 29436, 29437, 29438, 29445, 29448, 29449,
+29450, 29451, 29453, 29455, 29456, 29458, 29461, 29464,
+29466, 29468, 29469, 29470, 29471, 29472, 29477, 29479,
+29482, 29483, 29485, 29486, 29487, 29492
+
+VALIDATION RULES:
+- If the caller's ZIP appears above: VALID — continue intake
+- If NOT in the list: OUTSIDE service area — let the caller know warmly
+  and offer to connect with the team who may help find resources in their area
+- Only 5-digit ZIP codes are accepted

@@ -55,6 +55,7 @@ TEMPLATE_FILE = os.path.join(SCRIPT_DIR, 'stability360-actions-stack.yaml')
 LAMBDA_CODE_DIR = os.path.join(SCRIPT_DIR, 'lambda', 'actions')
 OPENAPI_SPEC_TEMPLATE = os.path.join(SCRIPT_DIR, 'openapi', 'actions-spec.yaml')
 ORCHESTRATION_PROMPT_FILE = os.path.join(SCRIPT_DIR, 'prompts', 'orchestration-prompt.txt')
+KB_SEED_DATA_DIR = os.path.join(SCRIPT_DIR, 'seed-data', 'kb-documents')
 
 DEFAULT_STACK_NAME = 'stability360-actions'
 DEFAULT_REGION = 'us-west-2'
@@ -73,8 +74,11 @@ MCP_TOOL_CONFIG_FILE = os.path.join(SCRIPT_DIR, 'ai-agent-tool-config.json')
 
 # Retrieve tool instruction for this agent
 RETRIEVE_TOOL_INSTRUCTION = (
-    'Search the knowledge base for programs, services, eligibility, '
-    'or community resources. Include county when relevant.'
+    'Search the knowledge base to: (1) classify the caller\'s need into a category, '
+    '(2) get the required intake fields for that category, '
+    '(3) validate ZIP codes against the service area, '
+    '(4) check employer against partner list, '
+    '(5) look up programs, services, eligibility, or community resources.'
 )
 
 RETRIEVE_TOOL_EXAMPLES = []
@@ -89,9 +93,11 @@ RESOURCE_LOOKUP_TOOL_INSTRUCTION = (
 )
 
 INTAKE_HELPER_TOOL_INSTRUCTION = (
-    'MANDATORY at every intake step. You MUST call this tool — you cannot classify needs, '
-    'validate ZIPs, determine required fields, or check partners without it. '
-    'Actions: classifyNeed, validateZip, getRequiredFields, checkPartner, getNextSteps.'
+    'Get next steps after showing search results (action=getNextSteps) and '
+    'record call disposition/outcome (action=recordDisposition). '
+    'Always include instance_id and contact_id. For recordDisposition, include ALL '
+    'collected intake fields (firstName, lastName, zipCode, contactMethod, contactInfo, '
+    'employmentStatus, employer, keyword, preferredDays, preferredTimes, etc.).'
 )
 
 
@@ -1022,6 +1028,93 @@ def find_existing_kb_association(qconnect_client, assistant_id):
     return None, None
 
 
+def upload_kb_seed_data(session, kb_id, seed_data_dir):
+    """Upload seed data documents to the Q Connect knowledge base.
+
+    Walks seed_data_dir for .txt files. For each file:
+      1. search_content by name — if exists, upload + update_content
+      2. if not found, start_content_upload + PUT + create_content
+
+    Returns count of documents uploaded/updated.
+    """
+    if not os.path.isdir(seed_data_dir):
+        logger.warning('KB seed data dir not found: %s', seed_data_dir)
+        return 0
+
+    import requests
+
+    qconnect_client = session.client('qconnect')
+    count = 0
+
+    for root, _dirs, files in os.walk(seed_data_dir):
+        for filename in sorted(files):
+            if not filename.endswith('.txt'):
+                continue
+            filepath = os.path.join(root, filename)
+            content_name = os.path.splitext(filename)[0]  # e.g. "need-categories"
+
+            with open(filepath, 'r', encoding='utf-8') as f:
+                file_body = f.read()
+
+            # Check if content already exists
+            existing_content_id = None
+            try:
+                resp = qconnect_client.search_content(
+                    knowledgeBaseId=kb_id,
+                    searchExpression={
+                        'filters': [
+                            {'field': 'NAME', 'operator': 'EQUALS', 'value': content_name},
+                        ],
+                    },
+                )
+                items = resp.get('contentSummaries', [])
+                if items:
+                    existing_content_id = items[0]['contentId']
+            except ClientError:
+                logger.debug('search_content failed for %s', content_name, exc_info=True)
+
+            try:
+                # Get presigned upload URL
+                upload_resp = qconnect_client.start_content_upload(
+                    knowledgeBaseId=kb_id,
+                    contentType='text/plain',
+                )
+                upload_id = upload_resp['uploadId']
+                presigned_url = upload_resp['url']
+                headers_to_include = upload_resp.get('headersToInclude', {})
+
+                # PUT the file content
+                put_headers = {'Content-Type': 'text/plain'}
+                put_headers.update(headers_to_include)
+                put_resp = requests.put(
+                    presigned_url, data=file_body.encode('utf-8'),
+                    headers=put_headers,
+                )
+                put_resp.raise_for_status()
+
+                if existing_content_id:
+                    qconnect_client.update_content(
+                        knowledgeBaseId=kb_id,
+                        contentId=existing_content_id,
+                        uploadId=upload_id,
+                    )
+                    logger.info('  Updated KB content: %s (id=%s)', content_name, existing_content_id)
+                else:
+                    resp = qconnect_client.create_content(
+                        knowledgeBaseId=kb_id,
+                        name=content_name,
+                        title=content_name,
+                        uploadId=upload_id,
+                    )
+                    logger.info('  Created KB content: %s (id=%s)', content_name, resp['content']['contentId'])
+                count += 1
+
+            except Exception:
+                logger.warning('Failed to upload KB content: %s', content_name, exc_info=True)
+
+    return count
+
+
 def _build_retrieve_override_values(assistant_id, kb_association_id):
     return [
         {
@@ -1758,6 +1851,8 @@ def main():
     parser.add_argument('--connect-instance-id', default='')
     parser.add_argument('--update-code-only', action='store_true')
     parser.add_argument('--update-prompt', action='store_true')
+    parser.add_argument('--update-kb', action='store_true',
+                        help='Upload KB seed data documents only')
     parser.add_argument('--connect-only', action='store_true',
                         help='Skip CFN/Lambda, do MCP (5-7) + Connect (8-13) steps only')
     parser.add_argument('--openapi-spec-url', default='',
@@ -1821,6 +1916,24 @@ def main():
             ORCHESTRATION_PROMPT_FILE, args.model_id,
         )
         logger.info('Prompt updated: %s', prompt_id)
+        return
+
+    # --- Update KB only ---
+    if args.update_kb:
+        if not args.connect_instance_id:
+            logger.error('--connect-instance-id required for --update-kb')
+            sys.exit(1)
+        assistant_id, _ = find_qconnect_assistant(session, args.connect_instance_id)
+        if not assistant_id:
+            logger.error('Could not find Q Connect assistant')
+            sys.exit(1)
+        qconnect_client = session.client('qconnect')
+        _, kb_id = find_existing_kb_association(qconnect_client, assistant_id)
+        if not kb_id:
+            logger.error('No KB association found on assistant')
+            sys.exit(1)
+        kb_count = upload_kb_seed_data(session, kb_id, KB_SEED_DATA_DIR)
+        logger.info('Uploaded %d KB documents', kb_count)
         return
 
     # --- Connect-only mode (skip CFN steps 1-4, do MCP 5-7 + Connect 8-12) ---
@@ -1892,9 +2005,21 @@ def main():
                 gateway_id, MCP_TOOL_NAMES,
             )
         logger.info('')
-        logger.info('--- Step 11: Create orchestration prompt ---')
+        logger.info('--- Step 10b: Upload KB seed data ---')
         assistant_id, _ = find_qconnect_assistant(session, args.connect_instance_id)
         qconnect_client = session.client('qconnect')
+        if assistant_id:
+            _, kb_id = find_existing_kb_association(qconnect_client, assistant_id)
+            if kb_id:
+                kb_count = upload_kb_seed_data(session, kb_id, KB_SEED_DATA_DIR)
+                logger.info('Uploaded %d KB documents', kb_count)
+            else:
+                logger.warning('No KB association found — skipping seed data upload')
+        else:
+            logger.warning('No Q Connect assistant found — skipping seed data upload')
+
+        logger.info('')
+        logger.info('--- Step 11: Create orchestration prompt ---')
         prompt_id = None
         if assistant_id:
             prompt_id = create_or_update_orchestration_prompt(
@@ -2089,11 +2214,24 @@ def main():
                 gateway_id, MCP_TOOL_NAMES,
             )
 
+        # Step 10b: Upload KB seed data
+        logger.info('')
+        logger.info('--- Step 10b: Upload KB seed data ---')
+        assistant_id, _ = find_qconnect_assistant(session, args.connect_instance_id)
+        qconnect_client = session.client('qconnect')
+        if assistant_id:
+            _, kb_id = find_existing_kb_association(qconnect_client, assistant_id)
+            if kb_id:
+                kb_count = upload_kb_seed_data(session, kb_id, KB_SEED_DATA_DIR)
+                logger.info('Uploaded %d KB documents', kb_count)
+            else:
+                logger.warning('No KB association found — skipping seed data upload')
+        else:
+            logger.warning('No Q Connect assistant found — skipping seed data upload')
+
         # Step 11: Create orchestration prompt
         logger.info('')
         logger.info('--- Step 11: Create orchestration prompt ---')
-        assistant_id, _ = find_qconnect_assistant(session, args.connect_instance_id)
-        qconnect_client = session.client('qconnect')
         prompt_id = None
         if assistant_id:
             prompt_id = create_or_update_orchestration_prompt(

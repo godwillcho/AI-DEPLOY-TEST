@@ -1,15 +1,12 @@
 """
 Stability360 Actions — Intake Helper (MCP Tool)
 
-Single handler for 6 intake-support actions:
-  1. validateZip        — Check if ZIP code is in tri-county service area
-  2. classifyNeed       — Map caller's stated need to a category
-  3. getRequiredFields  — Return field list for a given need category
-  4. checkPartner       — Check employer against partner list
-  5. getNextSteps       — Return post-search options text
-  6. recordDisposition  — Record call outcome (callback, live_transfer, etc.)
+Handler for 2 intake-support actions:
+  1. getNextSteps       — Return post-search options text
+  2. recordDisposition  — Record call outcome (callback, live_transfer, etc.)
 
-Moves deterministic logic out of the AI prompt to reduce prompt size.
+Classification, ZIP validation, field requirements, and partner checks
+are handled by the AI agent via KB Retrieve (knowledge base documents).
 """
 
 import logging
@@ -152,9 +149,14 @@ CATEGORY_MENU = [
 
 # Emergency keywords
 EMERGENCY_KEYWORDS = {
-    'shutoff', 'shut off', 'disconnection', 'no power', 'no electricity',
+    'shutoff', 'shut off', 'cut off', 'cutt off', 'cut electricity', 'cut my power',
+    'electricity cut', 'power cut', 'water cut', 'gas cut',
+    'turn off', 'turned off', 'disconnect', 'disconnection', 'disconnected',
+    'about to cut', 'going to cut', 'behind on', 'not paid', 'haven\'t paid',
+    'no power', 'no electricity', 'no water', 'no gas', 'no heat',
     'homeless', 'no home', 'on the street', 'no food', 'starving',
-    'no water', 'kicked out', 'sleeping outside', 'no place to stay',
+    'kicked out', 'sleeping outside', 'no place to stay',
+    'eviction notice', 'being evicted', 'about to be evicted',
     'emergency', 'crisis', 'urgent',
 }
 
@@ -174,8 +176,9 @@ def _classify_need(body):
             'message': 'Could not classify need. Show the numbered menu to the caller.',
         }
 
-    # Check for emergency
-    is_emergency = any(kw in need for kw in EMERGENCY_KEYWORDS)
+    # Check for emergency — AI can also flag via isEmergency param
+    ai_flagged = body.get('isEmergency', False)
+    is_emergency = ai_flagged or any(kw in need for kw in EMERGENCY_KEYWORDS)
 
     # Try to match to a category
     best_match = None
@@ -203,8 +206,8 @@ def _classify_need(body):
         'isEmergency': is_emergency,
     }
 
-    # Check if disambiguation needed
-    if best_match in DISAMBIGUATE_CATEGORIES:
+    # Check if disambiguation needed (skip for emergencies)
+    if not is_emergency and best_match in DISAMBIGUATE_CATEGORIES:
         disambig = DISAMBIGUATE_CATEGORIES[best_match]
         result['needsDisambiguation'] = True
         result['disambiguationQuestion'] = disambig['question']
@@ -483,10 +486,6 @@ def _record_disposition(body):
 # ---------------------------------------------------------------------------
 
 ACTION_MAP = {
-    'classifyNeed': _classify_need,
-    'validateZip': _validate_zip,
-    'getRequiredFields': _get_required_fields,
-    'checkPartner': _check_partner,
     'getNextSteps': _get_next_steps,
     'recordDisposition': _record_disposition,
 }

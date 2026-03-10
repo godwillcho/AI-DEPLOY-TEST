@@ -77,6 +77,24 @@ ATTR_MAP = {
 }
 
 # ---------------------------------------------------------------------------
+# Phone normalization (E.164)
+# ---------------------------------------------------------------------------
+
+def normalize_phone(phone):
+    """Normalize a phone number to E.164 format (+1XXXXXXXXXX).
+
+    Returns the normalized number, or the original string if it doesn't
+    look like a valid US phone number.
+    """
+    digits = re.sub(r'\D', '', str(phone))
+    if len(digits) == 10:
+        digits = '1' + digits
+    if len(digits) == 11 and digits.startswith('1'):
+        return '+' + digits
+    return phone  # not a recognizable phone number — return as-is
+
+
+# ---------------------------------------------------------------------------
 # Scoring field maps
 # ---------------------------------------------------------------------------
 

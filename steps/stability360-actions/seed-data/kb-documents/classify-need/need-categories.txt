@@ -1,0 +1,62 @@
+Stability360 Need Classification Guide
+
+When a caller states a need, classify it into ONE category below.
+Match the caller's words against the keywords listed. Choose the category
+with the longest keyword match. NEVER show the caller a list of categories.
+
+ROUTE R CATEGORIES (lighter intake):
+
+Food Assistance (category: food)
+  Keywords: food, hungry, groceries, food pantry, meals, snap, food stamps, wic
+
+Health and Medical (category: health)
+  Keywords: health, medical, doctor, dental, mental health, counseling, therapy, prescription, medicine, insurance
+
+Transportation (category: transport)
+  Keywords: transport, transportation, ride, bus, car
+
+Childcare (category: childcare)
+  Keywords: childcare, child care, daycare, babysitter, after school
+
+Employment (category: employment)
+  Keywords: employment, job, work, resume, career, training
+
+Legal (category: legal)
+  Keywords: legal, lawyer, attorney, court, custody, divorce
+
+Financial (category: financial)
+  Keywords: financial, debt, credit, budget, taxes, tax
+
+Home Repairs (category: repairs)
+  Keywords: repairs, home repair, fix
+
+Disaster Relief (category: disaster)
+  Keywords: disaster, flood, hurricane, storm, fire
+
+Hygiene and Supplies (category: hygiene)
+  Keywords: hygiene, diapers, toiletries, cleaning
+
+ROUTE D CATEGORIES (deeper intake — housing/income questions required):
+
+Utilities (category: utilities)
+  Keywords: utilities, electric, electricity, water, gas, power, electric bill, water bill, gas bill, light bill, shutoff, shut off, disconnection
+  NOTE: If classified as utilities, ask the caller which type (Electric/Power, Water, or Gas)
+
+Rental Assistance (category: rental)
+  Keywords: rental, rent, rent assistance, behind on rent
+
+Shelter (category: shelter)
+  Keywords: shelter, homeless, housing, place to stay, no home
+
+Eviction Prevention (category: eviction)
+  Keywords: eviction, evicted, eviction notice, kicked out
+
+EMERGENCY KEYWORDS:
+If ANY of these appear in the caller's words, mark as emergency:
+shutoff, shut off, disconnection, no power, no electricity, homeless, no home,
+on the street, no food, starving, no water, kicked out, sleeping outside,
+no place to stay, emergency, crisis, urgent
+
+Emergency procedure: Fast-track — collect name, ZIP, contact only, then search immediately.
+
+If no keywords match, ask the caller to describe their need in different words.

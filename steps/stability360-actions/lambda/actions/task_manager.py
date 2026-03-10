@@ -12,10 +12,11 @@ All operations are silent — the caller never knows about profile/case creation
 import json
 import logging
 import os
-import re
 
 import boto3
 from botocore.exceptions import ClientError
+
+from config import normalize_phone
 
 logger = logging.getLogger('task_manager')
 
@@ -43,12 +44,6 @@ UUID_RE = re.compile(
 # ---------------------------------------------------------------------------
 
 
-def _normalize_phone(phone):
-    """Normalize a phone number to E.164 format (+1XXXXXXXXXX)."""
-    digits = re.sub(r'\D', '', phone)
-    if len(digits) == 10:
-        digits = '1' + digits
-    return '+' + digits
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +77,7 @@ def find_or_create_customer_profile(body):
 
     # Normalize phone to E.164 format for consistent search/storage
     if phone:
-        phone = _normalize_phone(phone)
+        phone = normalize_phone(phone)
 
     try:
         profiles_client = boto3.client('customer-profiles', region_name=CONNECT_REGION)

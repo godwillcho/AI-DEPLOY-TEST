@@ -1,7 +1,7 @@
 openapi: "3.0.3"
 info:
   title: "Stability360 Actions API"
-  version: "4.0.0"
+  version: "5.0.0"
 
 servers:
   - url: "${API_GATEWAY_URL}"
@@ -10,7 +10,7 @@ paths:
   /intake/helper:
     post:
       operationId: intakeHelper
-      summary: "Validate ZIP, get required fields, or check partner affiliation"
+      summary: "Get next steps after resource search and record call dispositions"
       requestBody:
         required: true
         content:
@@ -23,22 +23,8 @@ paths:
                 action:
                   type: string
                   enum:
-                    - classifyNeed
-                    - validateZip
-                    - getRequiredFields
-                    - checkPartner
                     - getNextSteps
                     - recordDisposition
-                need:
-                  type: string
-                zipCode:
-                  type: string
-                category:
-                  type: string
-                employer:
-                  type: string
-                hasResults:
-                  type: boolean
                 disposition:
                   type: string
                   description: "Call outcome: live_transfer, callback, additional_search, self_service, out_of_area, declined, emergency"
@@ -53,11 +39,15 @@ paths:
                 keyword:
                   type: string
                   description: "Need category (e.g. food, utilities, shelter)"
+                zipCode:
+                  type: string
                 contactMethod:
                   type: string
                 contactInfo:
                   type: string
                 employmentStatus:
+                  type: string
+                employer:
                   type: string
                 preferredDays:
                   type: string

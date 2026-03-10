@@ -11,6 +11,7 @@ from botocore.exceptions import ClientError
 
 from config import (
     ATTR_MAP, CONNECT_INSTANCE_ID, CONNECT_REGION, UUID_RE, get_logger,
+    normalize_phone,
 )
 
 logger = get_logger('contact_attributes')
@@ -73,10 +74,18 @@ def save_contact_attributes(body, result, request_id):
 
     # Collect from request body
     attributes = {}
+    phone_attr_names = {'contactInfo', 'phoneNumber'}
+    contact_method = str(body.get('contactMethod', '')).strip().lower()
     for body_key, attr_name in ATTR_MAP.items():
         value = body.get(body_key)
         if value is not None and str(value).strip():
-            attributes[attr_name] = str(value).strip()
+            val = str(value).strip()
+            # Normalize phone numbers to E.164
+            if attr_name == 'phoneNumber':
+                val = normalize_phone(val)
+            elif attr_name == 'contactInfo' and contact_method in ('phone', 'both'):
+                val = normalize_phone(val)
+            attributes[attr_name] = val
 
     # Collect scoring results from handler output
     for result_key, attr_name in SCORE_FIELDS.items():

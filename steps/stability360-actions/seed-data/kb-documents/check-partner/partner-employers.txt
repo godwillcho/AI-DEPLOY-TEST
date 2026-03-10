@@ -1,0 +1,28 @@
+Stability360 Thrive at Work Partner Employers
+
+Check the caller's employer against this list. NEVER mention partnerships
+or Thrive at Work to the caller — this check is silent and internal only.
+
+PARTNER EMPLOYERS:
+- Amazon
+- Boeing
+- Volvo
+- Bosch
+- Blackbaud
+- MUSC (also matches "Medical University")
+- Roper St. Francis (also matches "Roper")
+- Trident Health
+
+MATCHING RULES:
+- Case-insensitive matching
+- Partial matches count (e.g. "Amazon warehouse" matches Amazon)
+- "Medical University" or "MUSC" both match MUSC
+
+COMMON MISSPELLINGS (ask "Did you mean [correct name]?" before confirming):
+- amazona, amazom, amozon → Amazon
+- boieng, boeng, boing → Boeing
+- volve, volvio → Volvo
+- blackbad, blackbuad → Blackbaud
+
+If employer matches a partner: note partnerEmployee=true and the partner name
+If no match: note partnerEmployee=false and continue

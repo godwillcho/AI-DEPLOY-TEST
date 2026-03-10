@@ -1826,6 +1826,101 @@ def create_or_find_case_fields(cases_client, domain_id):
     return field_map
 
 
+CASE_LAYOUT_NAME = 'Stability360-Intake-Layout'
+
+
+def create_or_find_case_layout(cases_client, domain_id, field_map):
+    """Create or update a case layout with all custom fields.
+
+    Returns layout_id or None.
+    """
+    # Check if layout already exists
+    existing_layout_id = None
+    try:
+        resp = cases_client.list_layouts(domainId=domain_id, maxResults=100)
+        for layout in resp.get('layouts', []):
+            if layout['name'] == CASE_LAYOUT_NAME:
+                existing_layout_id = layout['layoutId']
+                logger.info('Case layout already exists: %s (%s)', CASE_LAYOUT_NAME, existing_layout_id)
+                break
+    except Exception as e:
+        logger.warning('Could not list case layouts: %s', e)
+
+    # Build field list for layout (custom fields only — system fields like
+    # title, status, customer_id are shown automatically and cannot be in layouts)
+    # Split into top panel (key identifiers) and more info (details)
+    top_keys = ['needCategory', 'callDisposition', 'firstName', 'lastName', 'phoneNumber', 'zipCode']
+    top_fields = []
+    detail_fields = []
+    for body_key, field_id in field_map.items():
+        entry = {'id': field_id}
+        if body_key in top_keys:
+            top_fields.append(entry)
+        else:
+            detail_fields.append(entry)
+
+    content = {
+        'basic': {
+            'topPanel': {
+                'sections': [
+                    {
+                        'fieldGroup': {
+                            'fields': top_fields,
+                        },
+                    },
+                ],
+            },
+            'moreInfo': {
+                'sections': [
+                    {
+                        'fieldGroup': {
+                            'fields': detail_fields,
+                        },
+                    },
+                ],
+            },
+        },
+    }
+
+    try:
+        if existing_layout_id:
+            cases_client.update_layout(
+                domainId=domain_id,
+                layoutId=existing_layout_id,
+                name=CASE_LAYOUT_NAME,
+                content=content,
+            )
+            logger.info('Case layout updated: %s', existing_layout_id)
+            return existing_layout_id
+        else:
+            resp = cases_client.create_layout(
+                domainId=domain_id,
+                name=CASE_LAYOUT_NAME,
+                content=content,
+            )
+            layout_id = resp['layoutId']
+            logger.info('Case layout created: %s (%s)', CASE_LAYOUT_NAME, layout_id)
+            return layout_id
+    except Exception as e:
+        logger.warning('Could not create/update case layout: %s', e)
+        return None
+
+
+def attach_layout_to_template(cases_client, domain_id, template_id, layout_id):
+    """Attach a layout to a case template."""
+    try:
+        cases_client.update_template(
+            domainId=domain_id,
+            templateId=template_id,
+            layoutConfiguration={
+                'defaultLayout': layout_id,
+            },
+        )
+        logger.info('Layout %s attached to template %s', layout_id, template_id)
+    except Exception as e:
+        logger.warning('Could not attach layout to template: %s', e)
+
+
 def update_lambda_env_vars(lambda_client, function_name, new_vars):
     """Merge new environment variables into the Lambda function's existing config."""
     try:
@@ -1912,6 +2007,14 @@ def deploy_task_resources(session, connect_instance_id, lambda_function_name, re
         if case_field_map:
             new_env['CASE_FIELD_MAP'] = json.dumps(case_field_map)
             logger.info('Case field map: %d fields', len(case_field_map))
+
+        # 5c. Case layout + attach to template
+        if case_field_map and case_template_id:
+            logger.info('')
+            logger.info('--- Task Resources: Create/update case layout ---')
+            layout_id = create_or_find_case_layout(cases_client, cases_domain_id, case_field_map)
+            if layout_id:
+                attach_layout_to_template(cases_client, cases_domain_id, case_template_id, layout_id)
 
     # Store Connect instance ID for Lambda runtime
     new_env['CONNECT_INSTANCE_ID'] = connect_instance_id

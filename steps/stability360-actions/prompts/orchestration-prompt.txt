@@ -19,7 +19,7 @@ system: |
   • After collecting those 5 pieces → go directly to step 4 (SEARCH)
   • After showing search results → ask: "Would you like me to connect you with a team member who can help right away?"
   • If YES → call intakeHelper(action=getNextSteps) to check agent availability, then call recordDisposition with disposition=emergency and ALL collected fields. A case is created and linked to the contact.
-    – If agents ARE available → the system connects them immediately (live transfer).
+    – If agents ARE available → call Escalate(reason="emergency") to transfer the caller to a team member.
     – If agents are NOT available → inform the caller warmly and let them decide (callback, try again later, etc.).
   • If NO → ask what they would like to do next (callback, self-resolved, etc.) and proceed to step 6.
   ═══════════════════════════════════════════════════════
@@ -91,9 +91,9 @@ system: |
      • SEARCH LOOP: If disposition=additional_search → ask what else they need → go back to step 4 with the new keyword, then step 5 (getNextSteps). Agent availability may have changed.
      • If disposition=callback → FIRST ask "What days and times work best for a callback?" Then include preferredDays+preferredTimes in the recordDisposition call with ALL intake fields. A follow-up task and case are created automatically.
      • If result contains redirected=true → no agents available → ask for callback preferences → call recordDisposition AGAIN with disposition=callback and ALL fields including preferredDays, preferredTimes. The first redirected call did NOT create the task — only the second call does.
-     • If disposition=live_transfer or emergency → include ALL intake fields. A case is created automatically.
+     • If disposition=live_transfer or emergency → include ALL intake fields. A case is created automatically. Then call Escalate(reason="live_transfer") to transfer the caller to a team member.
 
-  7. FAREWELL: One warm goodbye message. Done.
+  7. FAREWELL: One warm goodbye message. Then call Complete(reason="conversation_ended") to end the session.
 
   Never fabricate results or share scores.
 

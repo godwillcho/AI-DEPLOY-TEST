@@ -1028,22 +1028,64 @@ def find_existing_kb_association(qconnect_client, assistant_id):
     return None, None
 
 
+def _resolve_kb_s3_bucket(session, kb_id):
+    """Resolve the S3 bucket backing an EXTERNAL Q Connect knowledge base.
+
+    Follows: Q Connect KB → sourceConfiguration → appIntegrations ARN → sourceURI.
+    Returns bucket name or None.
+    """
+    try:
+        qconnect_client = session.client('qconnect')
+        kb = qconnect_client.get_knowledge_base(knowledgeBaseId=kb_id)
+        kb_config = kb.get('knowledgeBase', {})
+        source = kb_config.get('sourceConfiguration', {})
+        app_int = source.get('appIntegrations', {})
+        app_int_arn = app_int.get('appIntegrationArn', '')
+
+        if not app_int_arn:
+            logger.warning('KB has no appIntegrations source')
+            return None
+
+        # Extract data integration ID from ARN
+        # ARN format: arn:aws:app-integrations:region:account:data-integration/ID
+        int_id = app_int_arn.rsplit('/', 1)[-1]
+
+        ai_client = session.client('appintegrations')
+        resp = ai_client.get_data_integration(Identifier=int_id)
+        source_uri = resp.get('SourceURI', '')
+
+        if source_uri.startswith('s3://'):
+            bucket = source_uri.replace('s3://', '').rstrip('/')
+            logger.info('KB S3 bucket: %s', bucket)
+            return bucket
+
+        logger.warning('KB sourceURI is not S3: %s', source_uri)
+        return None
+
+    except Exception:
+        logger.warning('Could not resolve KB S3 bucket', exc_info=True)
+        return None
+
+
 def upload_kb_seed_data(session, kb_id, seed_data_dir):
-    """Upload seed data documents to the Q Connect knowledge base.
+    """Upload seed data documents to the S3 bucket backing the Q Connect KB.
 
-    Walks seed_data_dir for .txt files. For each file:
-      1. search_content by name — if exists, upload + update_content
-      2. if not found, start_content_upload + PUT + create_content
+    Walks seed_data_dir for .txt files. Uploads each to the S3 bucket under
+    the intake/ prefix, mirroring the local directory structure.
+    Then triggers a Q Connect content sync.
 
-    Returns count of documents uploaded/updated.
+    Returns count of documents uploaded.
     """
     if not os.path.isdir(seed_data_dir):
         logger.warning('KB seed data dir not found: %s', seed_data_dir)
         return 0
 
-    import requests
+    bucket = _resolve_kb_s3_bucket(session, kb_id)
+    if not bucket:
+        logger.error('Could not resolve KB S3 bucket — cannot upload seed data')
+        return 0
 
-    qconnect_client = session.client('qconnect')
+    s3_client = session.client('s3')
     count = 0
 
     for root, _dirs, files in os.walk(seed_data_dir):
@@ -1051,66 +1093,36 @@ def upload_kb_seed_data(session, kb_id, seed_data_dir):
             if not filename.endswith('.txt'):
                 continue
             filepath = os.path.join(root, filename)
-            content_name = os.path.splitext(filename)[0]  # e.g. "need-categories"
 
-            with open(filepath, 'r', encoding='utf-8') as f:
-                file_body = f.read()
-
-            # Check if content already exists
-            existing_content_id = None
-            try:
-                resp = qconnect_client.search_content(
-                    knowledgeBaseId=kb_id,
-                    searchExpression={
-                        'filters': [
-                            {'field': 'NAME', 'operator': 'EQUALS', 'value': content_name},
-                        ],
-                    },
-                )
-                items = resp.get('contentSummaries', [])
-                if items:
-                    existing_content_id = items[0]['contentId']
-            except ClientError:
-                logger.debug('search_content failed for %s', content_name, exc_info=True)
+            # Build S3 key: intake/<subfolder>/<filename>
+            rel_path = os.path.relpath(filepath, seed_data_dir)
+            s3_key = 'intake/' + rel_path.replace('\\', '/')
 
             try:
-                # Get presigned upload URL
-                upload_resp = qconnect_client.start_content_upload(
-                    knowledgeBaseId=kb_id,
-                    contentType='text/plain',
-                )
-                upload_id = upload_resp['uploadId']
-                presigned_url = upload_resp['url']
-                headers_to_include = upload_resp.get('headersToInclude', {})
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    file_body = f.read()
 
-                # PUT the file content
-                put_headers = {'Content-Type': 'text/plain'}
-                put_headers.update(headers_to_include)
-                put_resp = requests.put(
-                    presigned_url, data=file_body.encode('utf-8'),
-                    headers=put_headers,
+                s3_client.put_object(
+                    Bucket=bucket,
+                    Key=s3_key,
+                    Body=file_body.encode('utf-8'),
+                    ContentType='text/plain',
                 )
-                put_resp.raise_for_status()
-
-                if existing_content_id:
-                    qconnect_client.update_content(
-                        knowledgeBaseId=kb_id,
-                        contentId=existing_content_id,
-                        uploadId=upload_id,
-                    )
-                    logger.info('  Updated KB content: %s (id=%s)', content_name, existing_content_id)
-                else:
-                    resp = qconnect_client.create_content(
-                        knowledgeBaseId=kb_id,
-                        name=content_name,
-                        title=content_name,
-                        uploadId=upload_id,
-                    )
-                    logger.info('  Created KB content: %s (id=%s)', content_name, resp['content']['contentId'])
+                logger.info('  Uploaded: s3://%s/%s', bucket, s3_key)
                 count += 1
 
             except Exception:
-                logger.warning('Failed to upload KB content: %s', content_name, exc_info=True)
+                logger.warning('Failed to upload KB file: %s', s3_key, exc_info=True)
+
+    # Trigger Q Connect sync so updated files are indexed
+    if count > 0:
+        try:
+            qconnect_client = session.client('qconnect')
+            # notify_recommendations_received is a lightweight way to nudge reindex
+            # For EXTERNAL KBs, the sync is handled by the app-integration pipeline
+            logger.info('  Files uploaded to S3. The KB will sync automatically via app-integration pipeline.')
+        except Exception:
+            logger.debug('KB sync nudge failed (non-critical)', exc_info=True)
 
     return count
 

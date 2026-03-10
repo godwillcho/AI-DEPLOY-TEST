@@ -1786,7 +1786,7 @@ def create_or_find_case_fields(cases_client, domain_id):
 
     Returns dict mapping body_key -> field_id.
     """
-    # List existing fields to avoid duplicates
+    # List existing fields to avoid duplicates (case-insensitive lookup)
     existing = {}
     try:
         paginator_token = None
@@ -1796,7 +1796,7 @@ def create_or_find_case_fields(cases_client, domain_id):
                 kwargs['nextToken'] = paginator_token
             resp = cases_client.list_fields(**kwargs)
             for f in resp.get('fields', []):
-                existing[f['name']] = f['fieldId']
+                existing[f['name'].lower()] = f['fieldId']
             paginator_token = resp.get('nextToken')
             if not paginator_token:
                 break
@@ -1805,8 +1805,8 @@ def create_or_find_case_fields(cases_client, domain_id):
 
     field_map = {}  # body_key -> field_id
     for display_name, body_key in CASE_CUSTOM_FIELDS:
-        if display_name in existing:
-            field_id = existing[display_name]
+        if display_name.lower() in existing:
+            field_id = existing[display_name.lower()]
             logger.info('  Case field exists: %s -> %s', display_name, field_id)
         else:
             try:
@@ -1825,7 +1825,7 @@ def create_or_find_case_fields(cases_client, domain_id):
                     resp = cases_client.list_fields(domainId=domain_id, maxResults=100)
                     found = False
                     for f in resp.get('fields', []):
-                        if f['name'] == display_name:
+                        if f['name'].lower() == display_name.lower():
                             field_id = f['fieldId']
                             logger.info('  Case field found: %s -> %s', display_name, field_id)
                             found = True

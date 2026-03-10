@@ -12,6 +12,7 @@ All operations are silent — the caller never knows about profile/case creation
 import json
 import logging
 import os
+import re
 
 import boto3
 from botocore.exceptions import ClientError

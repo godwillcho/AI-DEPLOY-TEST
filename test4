@@ -1,0 +1,201 @@
+$ python tools/deploy.py dev --stack ConnectDavidChat --fresh-david
+
+>>> C:\Users\godwill.cho\AppData\Local\Programs\Python\Python313\python.exe C:\Users\godwill.cho\OneDrive - SoftwareOne\Desktop\Mile High United Way\AMAZON CONNECT RESOURCES CDK LATEST\mhuw-connect-call-center\tools\clean_orphans.py dev --apply
+
+== Orphan scan ==
+  env:          dev
+  region:       us-east-1
+  instance_id:  2f7cf77a-8bbe-4c86-8149-b521153beced
+  mode:         APPLY (will delete)
+  types:        ['connect_contact_flow', 'connect_flow_module', 'lex_bot', 'wisdom_agent', 'wisdom_guardrail', 'wisdom_prompt']
+
+Building CFN-owned PhysicalResourceId set...
+  found 417 CFN-owned resource IDs across active stacks
+
+Wisdom assistant: arn:aws:wisdom:us-east-1:116981787195:assistant/07de4bcf-3410-4e11-a661-35cfc78f0c90
+
+Scanning Wisdom AI agents...
+Scanning Wisdom AI prompts...
+Scanning Wisdom AI guardrails...
+Scanning Lex bots...
+Scanning Connect contact flows (CDK-suffixed only)...
+Scanning Connect flow modules (CDK-suffixed only)...
+
+Total orphans: 0
+Nothing to delete. Exiting clean.
+
+>>> --fresh-david: nuking every David-scoped resource on this env before deploy.
+
+
+>>> C:\Users\godwill.cho\AppData\Local\Programs\Python\Python313\python.exe C:\Users\godwill.cho\OneDrive - SoftwareOne\Desktop\Mile High United Way\AMAZON CONNECT RESOURCES CDK LATEST\mhuw-connect-call-center\tools\clean_david.py dev --apply
+
+clean_david env=dev  account=116981787195  region=us-east-1  instance=2f7cf77a-8bbe-4c86-8149-b521153beced  apply=True
+
+CFN stack ConnectDavidChat-dev: status=DELETE_FAILED
+  stack is DELETE_FAILED; retrying with DeletionMode=FORCE_DELETE_STACK…
+  stack ConnectDavidChat-dev force-deleted.
+
+--- flow modules ---
+
+--- contact flows ---
+
+--- data tables ---
+
+--- Lambdas ---
+
+✅ done.
+
+>>> cdk deploy ConnectDavidChat-dev --context env=dev
+
+b'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n'
+b'!!                                                                                                                      !!\n'
+b'!!  This software has not been tested with node v26.4.0.                                                                !!\n'
+b'!!  Should you encounter odd runtime issues, please try using one of the supported release before filing a bug report.  !!\n'
+b'!!                                                                                                                      !!\n'
+b'!!  This software is currently running on node v26.4.0.                                                                 !!\n'
+b'!!  As of the current release of this software, supported node releases are:                                            !!\n'
+b'!!  - ^24.0.0 (Planned end-of-life: 2028-04-30)                                                                         !!\n'
+b'!!  - ^22.0.0 (Planned end-of-life: 2027-04-30)                                                                         !!\n'
+b'!!  - ^20.0.0 (Planned end-of-life: 2026-04-30) [DEPRECATED]                                                            !!\n'
+b'!!                                                                                                                      !!\n'
+b'!!  This warning can be silenced by setting the JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION environment variable.        !!\n'
+b'!!                                                                                                                      !!\n'
+b'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n'
+  [INFO] ConnectLex-dev: discovered Wisdom Assistant arn:aws:wisdom:us-east-1:116981787195:assistant/07de4bcf-3410-4e11-a661-35cfc78f0c90 for Q-in-Connect intents.
+  [INFO] ConnectAiAgent-dev: discovered Wisdom Assistant arn:aws:wisdom:us-east-1:116981787195:assistant/07de4bcf-3410-4e11-a661-35cfc78f0c90
+  [WARN] AI agent 'PhoneCapture' description is 377 chars; truncating to 255 (CFN limit).
+  [WARN] AI agent 'RequestCallback' description is 361 chars; truncating to 255 (CFN limit).
+  [WARN] AI agent 'RequestSMS' description is 361 chars; truncating to 255 (CFN limit).
+  [INFO] ConnectVoicemail-dev: discovered recordings at s3://mhuw-connect-storage-dev-116981787195/connect/dev/CallRecordings/ (KMS: arn:aws:kms:us-east-1:116981787195:key/aac5a301-e571-49ac-b7fb-c3bb3af430c6)
+
+  [WARN] FlowSubstitutor: 1 reference(s) could not be resolved on instance 2f7cf77a-8bbe-4c86-8149-b521153beced; left as-is in flow:
+          - FlowModuleId:MHUW ERROR MODULE
+
+  [INFO] ConnectDavidChat-dev: discovered Wisdom Assistant arn:aws:wisdom:us-east-1:116981787195:assistant/07de4bcf-3410-4e11-a661-35cfc78f0c90
+
+  [WARN] FlowSubstitutor: 1 reference(s) could not be resolved on instance 2f7cf77a-8bbe-4c86-8149-b521153beced; left as-is in flow:
+          - data-table-placeholder:MHUW-DavidCategoryRequirements (fallback to Attributes)
+
+
+  [WARN] FlowSubstitutor: 2 reference(s) could not be resolved on instance 2f7cf77a-8bbe-4c86-8149-b521153beced; left as-is in flow:
+          - data-table-placeholder:MHUW-DavidCategoryRequirements (fallback to Attributes)
+          - data-table-placeholder:MHUW-DavidQueues (fallback to Attributes)
+
+
+  [WARN] FlowSubstitutor: 2 reference(s) could not be resolved on instance 2f7cf77a-8bbe-4c86-8149-b521153beced; left as-is in flow:
+          - data-table-placeholder:MHUW-DavidCategoryRequirements (fallback to Attributes)
+          - data-table-placeholder:MHUW-DavidQueues (fallback to Attributes)
+
+  [INFO] ConnectDavidChat-dev: flow module 'MHUW David Query Salesforce Resources (CDK)' not yet deployed — toolName slug will be set on next deploy.
+  [INFO] ConnectDavidChat-dev: flow module 'MHUW David Check Navigator Availability (CDK)' not yet deployed — toolName slug will be set on next deploy.
+  [INFO] ConnectDavidChat-dev: flow module 'MHUW David Create Follow-up Task (CDK)' not yet deployed — toolName slug will be set on next deploy.
+  [WARN] AI agent 'DavidChat' description is 299 chars; truncating to 255 (CFN limit).
+
+  [WARN] FlowSubstitutor: 1 reference(s) could not be resolved on instance 2f7cf77a-8bbe-4c86-8149-b521153beced; left as-is in flow:
+          - LexV2Bot/AliasArn:MHUW-ChatAI-dev/live
+
+
+✨  Synthesis time: 41.95s
+
+ConnectDavidChat-dev: start: Building ConnectDavidChat-dev Template
+ConnectDavidChat-dev: success: Built ConnectDavidChat-dev Template
+ConnectDavidChat-dev: start: Publishing ConnectDavidChat-dev Template (116981787195-us-east-1-890bd673)
+ConnectDavidChat-dev: success: Published ConnectDavidChat-dev Template (116981787195-us-east-1-890bd673)
+ConnectDavidChat-dev: deploying... [1/1]
+ConnectDavidChat-dev: creating CloudFormation changeset...
+ConnectDavidChat-dev |  0/72 | 10:51:18 PM | REVIEW_IN_PROGRESS   | AWS::CloudFormation::Stack           | ConnectDavidChat-dev User Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:30 PM | CREATE_IN_PROGRESS   | AWS::CloudFormation::Stack           | ConnectDavidChat-dev User Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidResourceQueryRole (DavidResourceQueryRole7F709D72) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidTaskCreatorRole (DavidTaskCreatorRoleAABB84D5) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::Connect::HoursOfOperation       | DavidHoO 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::Logs::LogGroup                  | DavidTaskCreatorLogs (DavidTaskCreatorLogsB295F3AC) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::S3::Bucket                      | DavidTestWebsiteBucket (DavidTestWebsiteBucket9863BFD9) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidLexBotRole (DavidLexBotRole72A045D6) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::Logs::LogGroup                  | DavidResourceQueryLogs (DavidResourceQueryLogsCBD1CD3B) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::Logs::LogGroup                  | DavidDataTableCRLogGroup (DavidDataTableCRLogGroupE6420D21) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidDataTableCRProvider/framework-onEvent/ServiceRole (DavidDataTableCRProviderframeworkonEventServiceRole96706CC1) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::Connect::SecurityProfile        | DavidAIAgentSecurityProfile 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidGuardrailCRRole (DavidGuardrailCRRoleE890B8FD) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::Connect::ContactFlowModule      | MHUWDavidCheckNavigatorAvailabilityCDKV2 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::Lambda::LayerVersion            | DavidTestWebsiteDeployment/AwsCliLayer (DavidTestWebsiteDeploymentAwsCliLayer1445E6B9) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::Connect::ContactFlow            | MHUWDavidTaskRouterCDK 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | Custom::S3AutoDeleteObjectsCustomResourceProvider/Role (CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C/ServiceRole (CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::CDK::Metadata                   | CDKMetadata/Default (CDKMetadata) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::CloudFront::OriginAccessControl | DavidTestWebsiteDistribution/Origin1/S3OriginAccessControl (DavidTestWebsiteDistributionOrigin1S3OriginAccessControl4279240B) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidDataTableCRRole (DavidDataTableCRRole454F6523) 
+ConnectDavidChat-dev |  0/72 | 10:51:34 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidMcpPropagationDelayRole (DavidMcpPropagationDelayRole12A1FDA7) 
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::Wisdom::AIPrompt                | DavidPrompt 
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::Logs::LogGroup                  | DavidDataTableCRLogGroup (DavidDataTableCRLogGroupE6420D21) Resource creation Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidGuardrailCRRole (DavidGuardrailCRRoleE890B8FD) Resource creation Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::Logs::LogGroup                  | DavidResourceQueryLogs (DavidResourceQueryLogsCBD1CD3B) Resource creation Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidMcpPropagationDelayRole (DavidMcpPropagationDelayRole12A1FDA7) Resource creation Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidDataTableCRProvider/framework-onEvent/ServiceRole (DavidDataTableCRProviderframeworkonEventServiceRole96706CC1) Resource creation Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | Custom::S3AutoDeleteObjectsCustomResourceProvider/Role (CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092) Resource creation Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidDataTableCRRole (DavidDataTableCRRole454F6523) Resource creation Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C/ServiceRole (CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265) Resource creation Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::CloudFront::OriginAccessControl | DavidTestWebsiteDistribution/Origin1/S3OriginAccessControl (DavidTestWebsiteDistributionOrigin1S3OriginAccessControl4279240B) Resource creation Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::CDK::Metadata                   | CDKMetadata/Default (CDKMetadata) Resource creation Initiated
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_FAILED        | AWS::Connect::SecurityProfile        | DavidAIAgentSecurityProfile Resource handler returned message: "Security Profile 'MHUW-DavidChat-AI-Agent2-dev' already exists in instance '2f7cf77a-8bbe-4c86-8149-b521153beced'. (Service: Connect, Status Code: 409, Request ID: 539375bf-0bd8-4b32-bb9d-fabbc5400639) (SDK Attempt Count: 1)" (RequestToken: 070adb7a-0a3a-fcd6-473d-d2aa9c1fdf7e, HandlerErrorCode: AlreadyExists)
+ConnectDavidChat-dev |  0/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::Connect::HoursOfOperation       | DavidHoO Resource creation Initiated
+ConnectDavidChat-dev |  1/72 | 10:51:35 PM | CREATE_COMPLETE      | AWS::CDK::Metadata                   | CDKMetadata/Default (CDKMetadata) 
+ConnectDavidChat-dev |  1/72 | 10:51:35 PM | CREATE_IN_PROGRESS   | AWS::IAM::Role                       | DavidTaskCreatorRole (DavidTaskCreatorRoleAABB84D5) Resource creation Initiated
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_IN_PROGRESS   | AWS::S3::Bucket                      | DavidTestWebsiteBucket (DavidTestWebsiteBucket9863BFD9) Resource creation Initiated
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::IAM::Role                       | DavidTaskCreatorRole (DavidTaskCreatorRoleAABB84D5) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::IAM::Role                       | DavidDataTableCRRole (DavidDataTableCRRole454F6523) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::S3::Bucket                      | DavidTestWebsiteBucket (DavidTestWebsiteBucket9863BFD9) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::Logs::LogGroup                  | DavidResourceQueryLogs (DavidResourceQueryLogsCBD1CD3B) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::IAM::Role                       | DavidMcpPropagationDelayRole (DavidMcpPropagationDelayRole12A1FDA7) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::IAM::Role                       | Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C/ServiceRole (CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::IAM::Role                       | DavidGuardrailCRRole (DavidGuardrailCRRoleE890B8FD) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::Logs::LogGroup                  | DavidDataTableCRLogGroup (DavidDataTableCRLogGroupE6420D21) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::IAM::Role                       | DavidDataTableCRProvider/framework-onEvent/ServiceRole (DavidDataTableCRProviderframeworkonEventServiceRole96706CC1) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::IAM::Role                       | Custom::S3AutoDeleteObjectsCustomResourceProvider/Role (CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::Wisdom::AIPrompt                | DavidPrompt Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::Connect::HoursOfOperation       | DavidHoO Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::CloudFront::OriginAccessControl | DavidTestWebsiteDistribution/Origin1/S3OriginAccessControl (DavidTestWebsiteDistributionOrigin1S3OriginAccessControl4279240B) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::Connect::ContactFlow            | MHUWDavidTaskRouterCDK Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::Logs::LogGroup                  | DavidTaskCreatorLogs (DavidTaskCreatorLogsB295F3AC) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::IAM::Role                       | DavidLexBotRole (DavidLexBotRole72A045D6) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:36 PM | CREATE_FAILED        | AWS::IAM::Role                       | DavidResourceQueryRole (DavidResourceQueryRole7F709D72) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:37 PM | CREATE_FAILED        | AWS::Connect::ContactFlowModule      | MHUWDavidCheckNavigatorAvailabilityCDKV2 Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:40 PM | CREATE_FAILED        | AWS::Lambda::LayerVersion            | DavidTestWebsiteDeployment/AwsCliLayer (DavidTestWebsiteDeploymentAwsCliLayer1445E6B9) Resource creation cancelled
+ConnectDavidChat-dev |  1/72 | 10:51:41 PM | ROLLBACK_IN_PROGRESS | AWS::CloudFormation::Stack           | ConnectDavidChat-dev The following resource(s) failed to create: [CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092, DavidTestWebsiteBucket9863BFD9, DavidHoO, DavidResourceQueryRole7F709D72, DavidPrompt, CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265, DavidMcpPropagationDelayRole12A1FDA7, DavidTaskCreatorLogsB295F3AC, DavidLexBotRole72A045D6, DavidDataTableCRLogGroupE6420D21, DavidDataTableCRProviderframeworkonEventServiceRole96706CC1, DavidDataTableCRRole454F6523, DavidTestWebsiteDeploymentAwsCliLayer1445E6B9, DavidResourceQueryLogsCBD1CD3B, MHUWDavidCheckNavigatorAvailabilityCDKV2, DavidAIAgentSecurityProfile, DavidTaskCreatorRoleAABB84D5, DavidGuardrailCRRoleE890B8FD, DavidTestWebsiteDistributionOrigin1S3OriginAccessControl4279240B, MHUWDavidTaskRouterCDK]. Rollback requested by user.
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role                       | DavidDataTableCRProvider/framework-onEvent/ServiceRole (DavidDataTableCRProviderframeworkonEventServiceRole96706CC1) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role                       | DavidResourceQueryRole (DavidResourceQueryRole7F709D72) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::Connect::HoursOfOperation       | DavidHoO 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role                       | DavidMcpPropagationDelayRole (DavidMcpPropagationDelayRole12A1FDA7) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::Lambda::LayerVersion            | DavidTestWebsiteDeployment/AwsCliLayer (DavidTestWebsiteDeploymentAwsCliLayer1445E6B9) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role                       | Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C/ServiceRole (CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role                       | DavidLexBotRole (DavidLexBotRole72A045D6) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::S3::Bucket                      | DavidTestWebsiteBucket (DavidTestWebsiteBucket9863BFD9) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::Connect::ContactFlow            | MHUWDavidTaskRouterCDK 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role                       | Custom::S3AutoDeleteObjectsCustomResourceProvider/Role (CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::Logs::LogGroup                  | DavidTaskCreatorLogs (DavidTaskCreatorLogsB295F3AC) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role                       | DavidTaskCreatorRole (DavidTaskCreatorRoleAABB84D5) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::CDK::Metadata                   | CDKMetadata/Default (CDKMetadata) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role                       | DavidGuardrailCRRole (DavidGuardrailCRRoleE890B8FD) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::Logs::LogGroup                  | DavidResourceQueryLogs (DavidResourceQueryLogsCBD1CD3B) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::CloudFront::OriginAccessControl | DavidTestWebsiteDistribution/Origin1/S3OriginAccessControl (DavidTestWebsiteDistributionOrigin1S3OriginAccessControl4279240B) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::Logs::LogGroup                  | DavidDataTableCRLogGroup (DavidDataTableCRLogGroupE6420D21) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::IAM::Role                       | DavidDataTableCRRole (DavidDataTableCRRole454F6523) 
+ConnectDavidChat-dev |  1/72 | 10:51:43 PM | DELETE_IN_PROGRESS   | AWS::Connect::ContactFlowModule      | MHUWDavidCheckNavigatorAvailabilityCDKV2 
+ConnectDavidChat-dev |  0/72 | 10:51:44 PM | DELETE_COMPLETE      | AWS::CDK::Metadata                   | CDKMetadata/Default (CDKMetadata) 
+ConnectDavidChat-dev |  1/72 | 10:51:44 PM | DELETE_COMPLETE      | AWS::Logs::LogGroup                  | DavidTaskCreatorLogs (DavidTaskCreatorLogsB295F3AC) 
+ConnectDavidChat-dev |  2/72 | 10:51:44 PM | DELETE_COMPLETE      | AWS::Lambda::LayerVersion            | DavidTestWebsiteDeployment/AwsCliLayer (DavidTestWebsiteDeploymentAwsCliLayer1445E6B9) 
+ConnectDavidChat-dev |  3/72 | 10:51:44 PM | DELETE_COMPLETE      | AWS::Logs::LogGroup                  | DavidDataTableCRLogGroup (DavidDataTableCRLogGroupE6420D21) 
+ConnectDavidChat-dev |  4/72 | 10:51:44 PM | DELETE_COMPLETE      | AWS::Connect::HoursOfOperation       | DavidHoO 
+ConnectDavidChat-dev |  5/72 | 10:51:44 PM | DELETE_COMPLETE      | AWS::Logs::LogGroup                  | DavidResourceQueryLogs (DavidResourceQueryLogsCBD1CD3B) 
+ConnectDavidChat-dev |  6/72 | 10:51:44 PM | DELETE_COMPLETE      | AWS::CloudFront::OriginAccessControl | DavidTestWebsiteDistribution/Origin1/S3OriginAccessControl (DavidTestWebsiteDistributionOrigin1S3OriginAccessControl4279240B) 
+ConnectDavidChat-dev |  7/72 | 10:51:44 PM | DELETE_COMPLETE      | AWS::S3::Bucket                      | DavidTestWebsiteBucket (DavidTestWebsiteBucket9863BFD9) 
+ConnectDavidChat-dev |  8/72 | 10:51:44 PM | DELETE_COMPLETE      | AWS::Connect::ContactFlow            | MHUWDavidTaskRouterCDK 
+ConnectDavidChat-dev |  9/72 | 10:51:44 PM | DELETE_COMPLETE      | AWS::Connect::ContactFlowModule      | MHUWDavidCheckNavigatorAvailabilityCDKV2 
+ConnectDavidChat-dev | 10/72 | 10:51:53 PM | DELETE_COMPLETE      | AWS::IAM::Role                       | DavidResourceQueryRole (DavidResourceQueryRole7F709D72) 
+ConnectDavidChat-dev | 11/72 | 10:51:53 PM | DELETE_COMPLETE      | AWS::IAM::Role                       | DavidDataTableCRProvider/framework-onEvent/ServiceRole (DavidDataTableCRProviderframeworkonEventServiceRole96706CC1) 
+ConnectDavidChat-dev | 12/72 | 10:51:53 PM | DELETE_COMPLETE      | AWS::IAM::Role                       | DavidGuardrailCRRole (DavidGuardrailCRRoleE890B8FD) 
+ConnectDavidChat-dev | 13/72 | 10:51:53 PM | DELETE_COMPLETE      | AWS::IAM::Role                       | DavidLexBotRole (DavidLexBotRole72A045D6) 
+ConnectDavidChat-dev | 14/72 | 10:51:53 PM | DELETE_COMPLETE      | AWS::IAM::Role                       | Custom::S3AutoDeleteObjectsCustomResourceProvider/Role (CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092) 
+ConnectDavidChat-dev | 15/72 | 10:51:53 PM | DELETE_COMPLETE      | AWS::IAM::Role                       | DavidTaskCreatorRole (DavidTaskCreatorRoleAABB84D5) 
+ConnectDavidChat-dev | 16/72 | 10:51:53 PM | DELETE_COMPLETE      | AWS::IAM::Role                       | DavidDataTableCRRole (DavidDataTableCRRole454F6523) 
+ConnectDavidChat-dev | 17/72 | 10:51:53 PM | DELETE_COMPLETE      | AWS::IAM::Role                       | Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C/ServiceRole (CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756CServiceRole89A01265) 
+ConnectDavidChat-dev | 18/72 | 10:51:54 PM | DELETE_COMPLETE      | AWS::IAM::Role                       | DavidMcpPropagationDelayRole (DavidMcpPropagationDelayRole12A1FDA7) 

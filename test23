@@ -10,29 +10,29 @@ cf_url : https://d3kqsoljy1vra2.cloudfront.net
 fn_url : https://dualmdciv73slx3bq3olri7fiq0lrpbg.lambda-url.us-east-1.on.aws/
 
 === 1/4  Function URL — DIRECT (bypasses CloudFront) ===
-HTTP/1.1 403 Forbidden
-Date: Thu, 09 Jul 2026 14:50:30 GMT
+HTTP/1.1 200 OK
+Date: Thu, 09 Jul 2026 15:02:41 GMT
 Content-Type: application/json
-Content-Length: 144
+Content-Length: 21
 Connection: keep-alive
-x-amzn-RequestId: c073ad75-eb39-4cf7-8c0c-a54fef3878d8
-x-amzn-ErrorType: AccessDeniedException
+x-amzn-RequestId: b4f1fe43-5a2b-4222-a420-bb7d1d383807
+X-Amzn-Trace-Id: Root=1-6a4fb810-28de7dae410a31611cfae67b;Parent=5d220e9054c73070;Sampled=0;Lineage=1:00550d4b:0
 
-{"Message":"Forbidden. For troubleshooting Function URL authorization issues, see: https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html"}
+{"needs_setup": true}
 === 1b/4 Same endpoint — via CloudFront (for comparison) ===
-HTTP/1.1 403 Forbidden
+HTTP/1.1 200 OK
 Content-Type: application/json
-Content-Length: 144
+Content-Length: 21
 Connection: keep-alive
-Date: Thu, 09 Jul 2026 14:50:31 GMT
-x-amzn-ErrorType: AccessDeniedException
-x-amzn-RequestId: 4b050632-0204-4e91-a14f-648c8a363536
-X-Cache: Error from cloudfront
-Via: 1.1 90cd9738f5039f19f32a3038be262e54.cloudfront.net (CloudFront)
+Date: Thu, 09 Jul 2026 15:02:51 GMT
+X-Amzn-Trace-Id: Root=1-6a4fb81b-2250c03f62bb2a684f97f7e9;Parent=26e733785d0895c6;Sampled=0;Lineage=1:00550d4b:0
+x-amzn-RequestId: e6c6d273-f59b-4da9-be69-820d4114f92a
+X-Cache: Miss from cloudfront
+Via: 1.1 3cc15a9121327824750f88e9e514ca7c.cloudfront.net (CloudFront)
 X-Amz-Cf-Pop: DFW59-P5
-X-Amz-Cf-Id: DJyqj3wwNXjKrZJDJTK1P_G-4ugOz-s55-sf7N-TAahkj9iObmq8MQ==
+X-Amz-Cf-Id: 8bH_JgCPv9VMcewLfiDZBNLIt2OwZMgcYuPxWGlzFL02x-lhpwwOmQ==
 
-{"Message":"Forbidden. For troubleshooting Function URL authorization issues, see: https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html"}
+{"needs_setup": true}
 === 2/4  Did the redeploy land? Look for the new permission resource ===
 {
     "Status": "CREATE_COMPLETE",
@@ -65,6 +65,18 @@ X-Amz-Cf-Id: DJyqj3wwNXjKrZJDJTK1P_G-4ugOz-s55-sf7N-TAahkj9iObmq8MQ==
                     "lambda:FunctionUrlAuthType": "NONE"
                 }
             }
+        },
+        {
+            "Sid": "FunctionURLAllowInvokeAction",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "lambda:InvokeFunction",
+            "Resource": "arn:aws:lambda:us-east-1:116981787195:function:MHUW-DavidUatScenariosApi-dev",
+            "Condition": {
+                "Bool": {
+                    "lambda:InvokedViaFunctionUrl": "true"
+                }
+            }
         }
     ]
 }
@@ -73,6 +85,7 @@ X-Amz-Cf-Id: DJyqj3wwNXjKrZJDJTK1P_G-4ugOz-s55-sf7N-TAahkj9iObmq8MQ==
 {
     "AuthType": "NONE",
     "Cors": {
+        "AllowCredentials": false,
         "AllowHeaders": [
             "content-type",
             "authorization"
@@ -86,12 +99,25 @@ X-Amz-Cf-Id: DJyqj3wwNXjKrZJDJTK1P_G-4ugOz-s55-sf7N-TAahkj9iObmq8MQ==
         "AllowOrigins": [
             "*"
         ],
+        "ExposeHeaders": [],
         "MaxAge": 600
     },
     "Url": "https://dualmdciv73slx3bq3olri7fiq0lrpbg.lambda-url.us-east-1.on.aws/"
 }
 
+=== 5/4  Compare against the voicemail stack's public Function URL ===
+voicemail lambda: MHUW-Voicemail-dev
+None
+
+-- voicemail Function URL config --
+
+An error occurred (ValidationException) when calling the GetFunctionUrlConfig operation: 1 validation error detected: Value 'MHUW-Voicemail-dev
+None' at 'functionName' failed to satisfy constraint: Member must satisfy regular expression pattern: (arn:(aws[a-zA-Z-]*)?:lambda:)?((eusc-)?[a-z]{2}((-gov)|(-iso([a-z]?)))?-[a-z]+-\d{1}:)?(\d{12}:)?(function:)?([a-zA-Z0-9-_]{1,64})(:((?!\d+$)[0-9a-zA-Z-_]+))?
+
+-- voicemail Lambda resource policy --
+
+An error occurred (ValidationException) when calling the GetPolicy operation: 1 validation error detected: Value 'MHUW-Voicemail-dev
+None' at 'functionName' failed to satisfy constraint: Member must satisfy regular expression pattern: (arn:(aws[a-zA-Z-]*)?:lambda:)?((eusc-)?[a-z]{2}((-gov)|(-iso([a-z]?)))?-[a-z]+-\d{1}:)?(\d{12}:)?(function:)?([a-zA-Z0-9-_\.]+)(:(\$LATEST(\.PUBLISHED)?|[a-zA-Z0-9-_]+))?
+
 === Done ===
 Paste every block above into the chat.
-
-DOMAIN+godwill.

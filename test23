@@ -1,0 +1,97 @@
+$ bash tools/diagnose_uat_403.sh dev
+
+=== 0/4  Context ===
+env    : dev
+stack  : MHUW-DavidUatScenarios-dev
+lambda : MHUW-DavidUatScenariosApi-dev
+region : us-east-1
+account: 116981787195
+cf_url : https://d3kqsoljy1vra2.cloudfront.net
+fn_url : https://dualmdciv73slx3bq3olri7fiq0lrpbg.lambda-url.us-east-1.on.aws/
+
+=== 1/4  Function URL — DIRECT (bypasses CloudFront) ===
+HTTP/1.1 403 Forbidden
+Date: Thu, 09 Jul 2026 14:50:30 GMT
+Content-Type: application/json
+Content-Length: 144
+Connection: keep-alive
+x-amzn-RequestId: c073ad75-eb39-4cf7-8c0c-a54fef3878d8
+x-amzn-ErrorType: AccessDeniedException
+
+{"Message":"Forbidden. For troubleshooting Function URL authorization issues, see: https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html"}
+=== 1b/4 Same endpoint — via CloudFront (for comparison) ===
+HTTP/1.1 403 Forbidden
+Content-Type: application/json
+Content-Length: 144
+Connection: keep-alive
+Date: Thu, 09 Jul 2026 14:50:31 GMT
+x-amzn-ErrorType: AccessDeniedException
+x-amzn-RequestId: 4b050632-0204-4e91-a14f-648c8a363536
+X-Cache: Error from cloudfront
+Via: 1.1 90cd9738f5039f19f32a3038be262e54.cloudfront.net (CloudFront)
+X-Amz-Cf-Pop: DFW59-P5
+X-Amz-Cf-Id: DJyqj3wwNXjKrZJDJTK1P_G-4ugOz-s55-sf7N-TAahkj9iObmq8MQ==
+
+{"Message":"Forbidden. For troubleshooting Function URL authorization issues, see: https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html"}
+=== 2/4  Did the redeploy land? Look for the new permission resource ===
+{
+    "Status": "CREATE_COMPLETE",
+    "PhysicalId": "MHUW-DavidUatScenarios-dev-ApiUrlPublicInvokePermission-6AoBQAv1RXhR",
+    "LastUpdated": "2026-07-09T14:45:00.160000+00:00"
+}
+
+=== 2b/4 All AWS::Lambda::Permission resources on the stack ===
+----------------------------------------------------------------------------------------
+|                                DescribeStackResources                                |
++------------+-------------------------------------------------------------------------+
+|  Logical   |  ApiUrlPublicInvokePermission                                           |
+|  PhysicalId|  MHUW-DavidUatScenarios-dev-ApiUrlPublicInvokePermission-6AoBQAv1RXhR   |
+|  Status    |  CREATE_COMPLETE                                                        |
++------------+-------------------------------------------------------------------------+
+
+=== 3/4  Lambda resource-based policy (should grant * with InvokeFunctionUrl) ===
+{
+    "Version": "2012-10-17",
+    "Id": "default",
+    "Statement": [
+        {
+            "Sid": "MHUW-DavidUatScenarios-dev-ApiUrlPublicInvokePermission-6AoBQAv1RXhR",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "lambda:InvokeFunctionUrl",
+            "Resource": "arn:aws:lambda:us-east-1:116981787195:function:MHUW-DavidUatScenariosApi-dev",
+            "Condition": {
+                "StringEquals": {
+                    "lambda:FunctionUrlAuthType": "NONE"
+                }
+            }
+        }
+    ]
+}
+
+=== 4/4  Function URL AuthType (should be NONE) + CORS ===
+{
+    "AuthType": "NONE",
+    "Cors": {
+        "AllowHeaders": [
+            "content-type",
+            "authorization"
+        ],
+        "AllowMethods": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE"
+        ],
+        "AllowOrigins": [
+            "*"
+        ],
+        "MaxAge": 600
+    },
+    "Url": "https://dualmdciv73slx3bq3olri7fiq0lrpbg.lambda-url.us-east-1.on.aws/"
+}
+
+=== Done ===
+Paste every block above into the chat.
+
+DOMAIN+godwill.

@@ -1,0 +1,163 @@
+$ cdk diff -c env=prod
+b'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n'
+b'!!                                                                                                                      !!\n'
+b'!!  This software has not been tested with node v26.7.0.                                                                !!\n'
+b'!!  Should you encounter odd runtime issues, please try using one of the supported release before filing a bug report.  !!\n'
+b'!!                                                                                                                      !!\n'
+b'!!  This software is currently running on node v26.7.0.                                                                 !!\n'
+b'!!  As of the current release of this software, supported node releases are:                                            !!\n'
+b'!!  - ^24.0.0 (Planned end-of-life: 2028-04-30)                                                                         !!\n'
+b'!!  - ^22.0.0 (Planned end-of-life: 2027-04-30)                                                                         !!\n'
+b'!!  - ^20.0.0 (Planned end-of-life: 2026-04-30) [DEPRECATED]                                                            !!\n'
+b'!!                                                                                                                      !!\n'
+b'!!  This warning can be silenced by setting the JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION environment variable.        !!\n'
+b'!!                                                                                                                      !!\n'
+b'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n'
+WARNING No cross-stack-reference strength configured, defaulting to "strong". We recommend you set feature flag "@aws-cdk/core:defaultCrossStackReferences" to "both", then deploy everywhere, then set it to "weak". Alternatively, set it to "strong" explicitly to lock in the current producer-protecting behavior. (See: https://github.com/aws/aws-cdk/blob/main/packages/aws-cdk-lib/README.md#reference-strength) (Construct Annotations)
+   AllinCUFullU-prod
+   Acknowledge with 'Construct-Annotations::@aws-cdk/core:crossStackReferencesDefaultStrong'
+
+WARNING installLatestAwsSdk was not specified, and defaults to true. You probably do not want this. Set the global context flag '@aws-cdk/customresources:installLatestAwsSdkDefault' to false to switch this behavior off project-wide, or set the property explicitly to true if you know you need to call APIs that are not in Lambda's built-in SDK version. (Construct Annotations)
+   AllinCUFullU-prod/Secrets/RotationOnDeploy
+   Acknowledge with 'Construct-Annotations::@aws-cdk/custom-resources:installLatestAwsSdkNotSpecified'
+start: Building Secrets Nested Stack Template
+success: Built Secrets Nested Stack Template
+start: Publishing Secrets Nested Stack Template (368447243804-us-east-1-d46f2378)
+success: Published Secrets Nested Stack Template (368447243804-us-east-1-d46f2378)
+start: Building IamRole Nested Stack Template
+success: Built IamRole Nested Stack Template
+start: Publishing IamRole Nested Stack Template (368447243804-us-east-1-f4ff8e88)
+success: Published IamRole Nested Stack Template (368447243804-us-east-1-f4ff8e88)
+start: Building Lambdas Nested Stack Template
+success: Built Lambdas Nested Stack Template
+start: Publishing Lambdas Nested Stack Template (368447243804-us-east-1-3d68f985)
+success: Published Lambdas Nested Stack Template (368447243804-us-east-1-3d68f985)
+start: Building ContactFlow Nested Stack Template
+success: Built ContactFlow Nested Stack Template
+start: Publishing ContactFlow Nested Stack Template (368447243804-us-east-1-a25b2036)
+success: Published ContactFlow Nested Stack Template (368447243804-us-east-1-a25b2036)
+start: Building AllinCUFullU-prod Template
+success: Built AllinCUFullU-prod Template
+start: Publishing AllinCUFullU-prod Template (368447243804-us-east-1-7ffcea5f)
+success: Published AllinCUFullU-prod Template (368447243804-us-east-1-7ffcea5f)
+Hold on while we create a read-only change set to get a diff with accurate replacement information (use --method=template to use a less accurate but faster template-only diff)
+
+Stack AllinCUFullU-prod
+Resources
+[~] AWS::CloudFormation::Stack Secrets.NestedStack/Secrets.NestedStackResource SecretsNestedStackSecretsNestedStackResource20726466
+ └─ [~] TemplateURL
+     └─ [~] .Fn::Join:
+         └─ @@ -5,6 +5,6 @@
+            [ ]     {
+            [ ]       "Ref": "AWS::URLSuffix"
+            [ ]     },
+            [-]     "/cdk-hnb659fds-assets-368447243804-us-east-1/2bb1e4200404cb7ede60c786b0b2d2950ecf89059276da82d38a7da050276c75.json"
+            [+]     "/cdk-hnb659fds-assets-368447243804-us-east-1/19c21635de10478ec7bae769d8c70dc4589179b054f8b6fd6d236fd7e4a3ea6c.json"
+            [ ]   ]
+            [ ] ]
+[~] AWS::CloudFormation::Stack Lambdas.NestedStack/Lambdas.NestedStackResource LambdasNestedStackLambdasNestedStackResource871D36BA
+ └─ [~] TemplateURL
+     └─ [~] .Fn::Join:
+         └─ @@ -5,6 +5,6 @@
+            [ ]     {
+            [ ]       "Ref": "AWS::URLSuffix"
+            [ ]     },
+            [-]     "/cdk-hnb659fds-assets-368447243804-us-east-1/8658f3c6291d04e042202832e73b978c6f1f0c5d63baeabbe818e8d3b5bdbb5a.json"
+            [+]     "/cdk-hnb659fds-assets-368447243804-us-east-1/7970155745d31c082001d78bc4650a09a2a8d397b1ecd6256c51dd53e7e98e15.json"
+            [ ]   ]
+            [ ] ]
+[~] AWS::CloudFormation::Stack ContactFlow.NestedStack/ContactFlow.NestedStackResource ContactFlowNestedStackContactFlowNestedStackResource3C764EB6
+ ├─ [~] Parameters
+ │   └─ [-] Removed: .referencetoAllinCUFullUprodLambdasNestedStackLambdasNestedStackResourceE24526D5OutputsAllinCUFullUprodLambdasFnAuthV2Feedback3609F21AArn
+ └─ [~] TemplateURL
+     └─ [~] .Fn::Join:
+         └─ @@ -5,6 +5,6 @@
+            [ ]     {
+            [ ]       "Ref": "AWS::URLSuffix"
+            [ ]     },
+            [-]     "/cdk-hnb659fds-assets-368447243804-us-east-1/2d647d9722932466c25a5a09e8c0df3b4224c4452d621a20086d7c7485ad95eb.json"
+            [+]     "/cdk-hnb659fds-assets-368447243804-us-east-1/55266b5244d39c463ed3221a35cb88e9d7869a5ac3201cdb9ba6a6f571738a0a.json"
+            [ ]   ]
+            [ ] ]
+
+Stack AllinCUFullU-prod-SecretsNestedStackSecretsNestedStackResource20726466-1IZWZSCM9ZIRN
+Resources
+[~] Custom::AWS Secrets/RotationOnDeploy/Resource RotationOnDeploy07F71B1C
+ ├─ [~] Create
+ │   └─ [~] .Fn::Join:
+ │       └─ @@ -5,6 +5,6 @@
+ │          [ ]     {
+ │          [ ]       "Ref": "RotationFnF5FD23F8"
+ │          [ ]     },
+ │          [-]     "\",\"InvocationType\":\"RequestResponse\",\"Payload\":\"{\\\"deploy_id\\\": \\\"2026-08-18T14:11:06+00:00\\\"}\"},\"physicalResourceId\":{\"id\":\"rotation-on-deploy\"}}"
+ │          [+]     "\",\"InvocationType\":\"RequestResponse\",\"Payload\":\"{\\\"deploy_id\\\": \\\"2026-08-18T14:44:56+00:00\\\"}\"},\"physicalResourceId\":{\"id\":\"rotation-on-deploy\"}}"
+ │          [ ]   ]
+ │          [ ] ]
+ └─ [~] Update
+     └─ [~] .Fn::Join:
+         └─ @@ -5,6 +5,6 @@
+            [ ]     {
+            [ ]       "Ref": "RotationFnF5FD23F8"
+            [ ]     },
+            [-]     "\",\"InvocationType\":\"RequestResponse\",\"Payload\":\"{\\\"deploy_id\\\": \\\"2026-08-18T14:11:06+00:00\\\"}\"},\"physicalResourceId\":{\"id\":\"rotation-on-deploy\"}}"
+            [+]     "\",\"InvocationType\":\"RequestResponse\",\"Payload\":\"{\\\"deploy_id\\\": \\\"2026-08-18T14:44:56+00:00\\\"}\"},\"physicalResourceId\":{\"id\":\"rotation-on-deploy\"}}"
+            [ ]   ]
+            [ ] ]
+
+Stack AllinCUFullU-prod-IamRoleNestedStackIamRoleNestedStackResource97089049-GEFBAMKGX8L4
+There were no differences
+Stack AllinCUFullU-prod-LambdasNestedStackLambdasNestedStackResource871D36BA-1GVQU8YDZXIRH
+Resources
+[~] AWS::Lambda::Function Lambdas/FnCallTransfer FnCallTransferA38918D4
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 55b98898e36ac1598fb3540d3d0c651bed82e035b6ba3ba5561c12fe4f3e3889.zip
+ │       └─ [+] e9f0b75b328fb9b25e4d3308b08514a82b37cf72944fd9c09fa3825467028229.zip
+ ├─ [~] Environment
+ │   └─ [~] .Variables:
+ │       └─ [~] .DESTINATIONS:
+ │           ├─ [-] Agent,AGENT,agent,agent_phase,phone_agent,PhoneAgent,warm_transfer,WarmTransfer,cold_transfer,transfer,Transfer,AgentPhase
+ │           └─ [+] Agent,AGENT,agent_phase
+ └─ [~] Metadata
+     └─ [~] .aws:asset:path:
+         ├─ [-] asset.55b98898e36ac1598fb3540d3d0c651bed82e035b6ba3ba5561c12fe4f3e3889
+         └─ [+] asset.e9f0b75b328fb9b25e4d3308b08514a82b37cf72944fd9c09fa3825467028229
+
+Outputs
+[-] Output AllinCUFullUprodLambdasFnAuthV2Feedback3609F21AArn: {"Value":{"Fn::GetAtt":["FnAuthV2Feedback0524CC5E","Arn"]}}
+
+Omitted 7 changes because they are likely mangled non-ASCII characters. Use --strict to print them.
+Stack AllinCUFullU-prod-ContactFlowNestedStackContactFlowNestedStackResource3C764EB6-1G9PU8GA2SI1A
+Parameters
+[-] Parameter referencetoAllinCUFullUprodLambdasNestedStackLambdasNestedStackResourceE24526D5OutputsAllinCUFullUprodLambdasFnAuthV2Feedback3609F21AArn: {"Type":"String"}
+
+Resources
+[~] AWS::Connect::ContactFlow ContactFlow/PindropFlow PindropFlow
+ └─ [~] Content
+     └─ [~] .Fn::Join:
+         └─ @@ -1,7 +1,7 @@
+            [ ] [
+            [ ]   "",
+            [ ]   [
+            [-]     "{\"Version\": \"2019-10-30\", \"StartAction\": \"logging\", \"Metadata\": {\"entryPointPosition\": {\"x\": -626.4, \"y\": -350.4}, \"ActionMetadata\": {\"logging\": {\"position\": {\"x\": -546.4, \"y\": -219.2}}, \"set_attrs\": {\"position\": {\"x\": -367.2, \"y\": -7.2}, \"dynamicParams\": []}, \"invoke_start_contact\": {\"position\": {\"x\": -68.8, \"y\": 115.2}, \"parameters\": {\"LambdaFunctionARN\": {\"displayName\": \"$.Attributes.pindrop_start_contact_arn\"}, \"LambdaInvocationAttributes\": {\"From\": {\"displayName\": \"$.Media.Sip.Headers.From\"}, \"OLI\": {\"displayName\": \"$.Media.Sip.Headers.ISUP-OLI\"}, \"P-Asserted-Identity\": {\"displayName\": \"$.Media.Sip.Headers.P-Asserted-Identity\"}, \"P-Charge-Info\": {\"displayName\": \"$.Media.Sip.Headers.P-Charge-Info\"}, \"To\": {\"displayName\": \"$.Media.Sip.Headers.To\"}, \"JIP\": {\"displayName\": \"$.Media.Sip.Headers.JIP\"}, \"Hop-Counter\": {\"displayName\": \"$.Media.Sip.Headers.Hop-Counter\"}, \"Originating-Switch\": {\"displayName\": \"$.Media.Sip.Headers.Originating-Switch\"}, \"Originating-Trunk\": {\"displayName\": \"$.Media.Sip.Headers.Originating-Trunk\"}, \"Call-Forwarding-Indicator\": {\"displayName\": \"$.Media.Sip.Headers.Call-Forwarding-Indicator\"}, \"Calling-Party-Address\": {\"displayName\": \"$.Media.Sip.Headers.Calling-Party-Address\"}, \"Called-Party-Address\": {\"displayName\": \"$.Media.Sip.Headers.Called-Party-Address\"}}}, \"dynamicMetadata\": {\"From\": true, \"OLI\": true, \"P-Asserted-Identity\": true, \"P-Charge-Info\": true, \"To\": true, \"JIP\": true, \"Hop-Counter\": true, \"Originating-Switch\": true, \"Originating-Trunk\": true, \"Call-Forwarding-Indicator\": true, \"Calling-Party-Address\": true, \"Called-Party-Address\": true}}, \"stream_on\": {\"position\": {\"x\": 180.8, \"y\": 34.4}, \"toCustomer\": false, \"fromCustomer\": true}, \"invoke_start_media\": {\"position\": {\"x\": 503.2, \"y\": -130.4}, \"parameters\": {\"LambdaFunctionARN\": {\"displayName\": \"$.Attributes.pindrop_start_media_arn\"}}, \"dynamicMetadata\": {}}, \"prompt\": {\"position\": {\"x\": 784.8, \"y\": -247.2}}, \"stream_off\": {\"position\": {\"x\": 1412.0, \"y\": -387.2}}, \"disconnect\": {\"position\": {\"x\": 271.2, \"y\": 496.8}}, \"invoke_stop_media\": {\"position\": {\"x\": 1128.0, \"y\": -433.6}, \"parameters\": {\"LambdaFunctionARN\": {\"displayName\": \"$.Attributes.pindrop_stop_media_arn\"}}, \"dynamicMetadata\": {}}, \"invoke_stop_contact\": {\"position\": {\"x\": 1270.0, \"y\": -410.0}, \"parameters\": {\"LambdaFunctionARN\": {\"displayName\": \"$.Attributes.pindrop_stop_contact_arn\"}}, \"dynamicMetadata\": {}}}, \"Annotations\": [], \"name\": \"AllinCUFullU-flow-prod\", \"description\": \"Pindrop integration flow (prod)\", \"type\": \"contactFlow\", \"status\": \"published\", \"hash\": {}}, \"Actions\": [{\"Identifier\": \"logging\", \"Type\": \"UpdateFlowLoggingBehavior\", \"Parameters\": {\"FlowLoggingBehavior\": \"Enabled\"}, \"Transitions\": {\"NextAction\": \"set_attrs\"}}, {\"Identifier\": \"set_attrs\", \"Type\": \"UpdateContactAttributes\", \"Parameters\": {\"Attributes\": {\"pindrop_start_contact_arn\": \"",
+            [+]     "{\"Version\": \"2019-10-30\", \"StartAction\": \"logging\", \"Metadata\": {\"entryPointPosition\": {\"x\": -626.4, \"y\": -350.4}, \"ActionMetadata\": {\"logging\": {\"position\": {\"x\": -546.4, \"y\": -219.2}}, \"set_attrs\": {\"position\": {\"x\": -367.2, \"y\": -7.2}, \"dynamicParams\": []}, \"invoke_start_contact\": {\"position\": {\"x\": -68.8, \"y\": 115.2}, \"parameters\": {\"LambdaFunctionARN\": {\"displayName\": \"$.Attributes.pindrop_start_contact_arn\"}}, \"dynamicMetadata\": {}}, \"stream_on\": {\"position\": {\"x\": 180.8, \"y\": 34.4}, \"toCustomer\": false, \"fromCustomer\": true}, \"invoke_start_media\": {\"position\": {\"x\": 503.2, \"y\": -130.4}, \"parameters\": {\"LambdaFunctionARN\": {\"displayName\": \"$.Attributes.pindrop_start_media_arn\"}}, \"dynamicMetadata\": {}}, \"prompt\": {\"position\": {\"x\": 784.8, \"y\": -247.2}}, \"stream_off\": {\"position\": {\"x\": 1412.0, \"y\": -387.2}}, \"disconnect\": {\"position\": {\"x\": 271.2, \"y\": 496.8}}, \"invoke_stop_media\": {\"position\": {\"x\": 1128.0, \"y\": -433.6}, \"parameters\": {\"LambdaFunctionARN\": {\"displayName\": \"$.Attributes.pindrop_stop_media_arn\"}}, \"dynamicMetadata\": {}}, \"invoke_stop_contact\": {\"position\": {\"x\": 1270.0, \"y\": -410.0}, \"parameters\": {\"LambdaFunctionARN\": {\"displayName\": \"$.Attributes.pindrop_stop_contact_arn\"}}, \"dynamicMetadata\": {}}}, \"Annotations\": [], \"name\": \"AllinCUFullU-flow-prod\", \"description\": \"Pindrop integration flow (prod)\", \"type\": \"contactFlow\", \"status\": \"published\", \"hash\": {}}, \"Actions\": [{\"Identifier\": \"logging\", \"Type\": \"UpdateFlowLoggingBehavior\", \"Parameters\": {\"FlowLoggingBehavior\": \"Enabled\"}, \"Transitions\": {\"NextAction\": \"set_attrs\"}}, {\"Identifier\": \"set_attrs\", \"Type\": \"UpdateContactAttributes\", \"Parameters\": {\"Attributes\": {\"pindrop_start_contact_arn\": \"",
+            [ ]     {
+            [ ]       "Ref": "referencetoAllinCUFullUprodLambdasNestedStackLambdasNestedStackResourceE24526D5OutputsAllinCUFullUprodLambdasFnStartContact28E115F2Arn"
+            [ ]     },
+            @@ -25,10 +25,6 @@
+            [ ]     {
+            [ ]       "Ref": "referencetoAllinCUFullUprodLambdasNestedStackLambdasNestedStackResourceE24526D5OutputsAllinCUFullUprodLambdasFnAuthV2EDDBB52FArn"
+            [ ]     },
+            [-]     "\", \"pindrop_auth_v2_feedback_arn\": \"",
+            [-]     {
+            [-]       "Ref": "referencetoAllinCUFullUprodLambdasNestedStackLambdasNestedStackResourceE24526D5OutputsAllinCUFullUprodLambdasFnAuthV2Feedback3609F21AArn"
+            [-]     },
+            [-]     "\"}, \"TargetContact\": \"Current\"}, \"Transitions\": {\"NextAction\": \"invoke_start_contact\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"invoke_start_contact\"}]}}, {\"Identifier\": \"invoke_start_contact\", \"Type\": \"InvokeLambdaFunction\", \"Parameters\": {\"LambdaFunctionARN\": \"$.Attributes.pindrop_start_contact_arn\", \"LambdaInvocationAttributes\": {\"From\": \"$.Media.Sip.Headers.From\", \"OLI\": \"$.Media.Sip.Headers.ISUP-OLI\", \"P-Asserted-Identity\": \"$.Media.Sip.Headers.P-Asserted-Identity\", \"P-Charge-Info\": \"$.Media.Sip.Headers.P-Charge-Info\", \"To\": \"$.Media.Sip.Headers.To\", \"JIP\": \"$.Media.Sip.Headers.JIP\", \"Hop-Counter\": \"$.Media.Sip.Headers.Hop-Counter\", \"Originating-Switch\": \"$.Media.Sip.Headers.Originating-Switch\", \"Originating-Trunk\": \"$.Media.Sip.Headers.Originating-Trunk\", \"Call-Forwarding-Indicator\": \"$.Media.Sip.Headers.Call-Forwarding-Indicator\", \"Calling-Party-Address\": \"$.Media.Sip.Headers.Calling-Party-Address\", \"Called-Party-Address\": \"$.Media.Sip.Headers.Called-Party-Address\"}, \"InvocationTimeLimitSeconds\": \"8\", \"InvocationType\": \"SYNCHRONOUS\", \"ResponseValidation\": {\"ResponseType\": \"STRING_MAP\"}}, \"Transitions\": {\"NextAction\": \"stream_on\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"disconnect\"}]}}, {\"Identifier\": \"stream_on\", \"Type\": \"UpdateContactMediaStreamingBehavior\", \"Parameters\": {\"MediaStreamingState\": \"Enabled\", \"MediaStreamType\": \"Audio\", \"Participants\": [{\"ParticipantType\": \"Customer\", \"MediaDirections\": [\"From\"]}]}, \"Transitions\": {\"NextAction\": \"invoke_start_media\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"invoke_start_media\"}]}}, {\"Identifier\": \"invoke_start_media\", \"Type\": \"InvokeLambdaFunction\", \"Parameters\": {\"LambdaFunctionARN\": \"$.Attributes.pindrop_start_media_arn\", \"InvocationTimeLimitSeconds\": \"8\", \"InvocationType\": \"SYNCHRONOUS\", \"ResponseValidation\": {\"ResponseType\": \"STRING_MAP\"}}, \"Transitions\": {\"NextAction\": \"prompt\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"disconnect\"}]}}, {\"Identifier\": \"prompt\", \"Type\": \"MessageParticipant\", \"Parameters\": {\"SkipWhenDTMFBufferEnabled\": \"false\", \"Text\": \"This is a Pindrop integration test call. Goodbye.\"}, \"Transitions\": {\"NextAction\": \"invoke_stop_media\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"invoke_stop_media\"}]}}, {\"Identifier\": \"invoke_stop_media\", \"Type\": \"InvokeLambdaFunction\", \"Parameters\": {\"LambdaFunctionARN\": \"$.Attributes.pindrop_stop_media_arn\", \"InvocationTimeLimitSeconds\": \"8\", \"InvocationType\": \"SYNCHRONOUS\", \"ResponseValidation\": {\"ResponseType\": \"STRING_MAP\"}}, \"Transitions\": {\"NextAction\": \"invoke_stop_contact\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"invoke_stop_contact\"}]}}, {\"Identifier\": \"invoke_stop_contact\", \"Type\": \"InvokeLambdaFunction\", \"Parameters\": {\"LambdaFunctionARN\": \"$.Attributes.pindrop_stop_contact_arn\", \"InvocationTimeLimitSeconds\": \"8\", \"InvocationType\": \"SYNCHRONOUS\", \"ResponseValidation\": {\"ResponseType\": \"STRING_MAP\"}}, \"Transitions\": {\"NextAction\": \"stream_off\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"stream_off\"}]}}, {\"Identifier\": \"stream_off\", \"Type\": \"UpdateContactMediaStreamingBehavior\", \"Parameters\": {\"MediaStreamingState\": \"Disabled\", \"MediaStreamType\": \"Audio\", \"Participants\": [{\"ParticipantType\": \"Customer\", \"MediaDirections\": [\"From\"]}]}, \"Transitions\": {\"NextAction\": \"disconnect\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"disconnect\"}]}}, {\"Identifier\": \"disconnect\", \"Type\": \"DisconnectParticipant\", \"Parameters\": {}, \"Transitions\": {}}]}"
+            [+]     "\"}, \"TargetContact\": \"Current\"}, \"Transitions\": {\"NextAction\": \"invoke_start_contact\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"invoke_start_contact\"}]}}, {\"Identifier\": \"invoke_start_contact\", \"Type\": \"InvokeLambdaFunction\", \"Parameters\": {\"LambdaFunctionARN\": \"$.Attributes.pindrop_start_contact_arn\", \"InvocationTimeLimitSeconds\": \"8\", \"InvocationType\": \"SYNCHRONOUS\", \"ResponseValidation\": {\"ResponseType\": \"STRING_MAP\"}}, \"Transitions\": {\"NextAction\": \"stream_on\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"disconnect\"}]}}, {\"Identifier\": \"stream_on\", \"Type\": \"UpdateContactMediaStreamingBehavior\", \"Parameters\": {\"MediaStreamingState\": \"Enabled\", \"MediaStreamType\": \"Audio\", \"Participants\": [{\"ParticipantType\": \"Customer\", \"MediaDirections\": [\"From\"]}]}, \"Transitions\": {\"NextAction\": \"invoke_start_media\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"invoke_start_media\"}]}}, {\"Identifier\": \"invoke_start_media\", \"Type\": \"InvokeLambdaFunction\", \"Parameters\": {\"LambdaFunctionARN\": \"$.Attributes.pindrop_start_media_arn\", \"InvocationTimeLimitSeconds\": \"8\", \"InvocationType\": \"SYNCHRONOUS\", \"ResponseValidation\": {\"ResponseType\": \"STRING_MAP\"}}, \"Transitions\": {\"NextAction\": \"prompt\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"disconnect\"}]}}, {\"Identifier\": \"prompt\", \"Type\": \"MessageParticipant\", \"Parameters\": {\"SkipWhenDTMFBufferEnabled\": \"false\", \"Text\": \"This is a Pindrop integration test call. Goodbye.\"}, \"Transitions\": {\"NextAction\": \"invoke_stop_media\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"invoke_stop_media\"}]}}, {\"Identifier\": \"invoke_stop_media\", \"Type\": \"InvokeLambdaFunction\", \"Parameters\": {\"LambdaFunctionARN\": \"$.Attributes.pindrop_stop_media_arn\", \"InvocationTimeLimitSeconds\": \"8\", \"InvocationType\": \"SYNCHRONOUS\", \"ResponseValidation\": {\"ResponseType\": \"STRING_MAP\"}}, \"Transitions\": {\"NextAction\": \"invoke_stop_contact\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"invoke_stop_contact\"}]}}, {\"Identifier\": \"invoke_stop_contact\", \"Type\": \"InvokeLambdaFunction\", \"Parameters\": {\"LambdaFunctionARN\": \"$.Attributes.pindrop_stop_contact_arn\", \"InvocationTimeLimitSeconds\": \"8\", \"InvocationType\": \"SYNCHRONOUS\", \"ResponseValidation\": {\"ResponseType\": \"STRING_MAP\"}}, \"Transitions\": {\"NextAction\": \"stream_off\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"stream_off\"}]}}, {\"Identifier\": \"stream_off\", \"Type\": \"UpdateContactMediaStreamingBehavior\", \"Parameters\": {\"MediaStreamingState\": \"Disabled\", \"MediaStreamType\": \"Audio\", \"Participants\": [{\"ParticipantType\": \"Customer\", \"MediaDirections\": [\"From\"]}]}, \"Transitions\": {\"NextAction\": \"disconnect\", \"Errors\": [{\"ErrorType\": \"NoMatchingError\", \"NextAction\": \"disconnect\"}]}}, {\"Identifier\": \"disconnect\", \"Type\": \"DisconnectParticipant\", \"Parameters\": {}, \"Transitions\": {}}]}"
+            [ ]   ]
+            [ ] ]
+
+
+
+✨  Number of stacks with differences: 4
+

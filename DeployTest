@@ -1,0 +1,118 @@
+$ cdk diff -c env=prod --all
+Unknown option(s): --all. These will be ignored. Run 'cdk --help' to see available options.
+b'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n'
+b'!!                                                                                                                      !!\n'
+b'!!  This software has not been tested with node v26.7.0.                                                                !!\n'
+b'!!  Should you encounter odd runtime issues, please try using one of the supported release before filing a bug report.  !!\n'
+b'!!                                                                                                                      !!\n'
+b'!!  This software is currently running on node v26.7.0.                                                                 !!\n'
+b'!!  As of the current release of this software, supported node releases are:                                            !!\n'
+b'!!  - ^24.0.0 (Planned end-of-life: 2028-04-30)                                                                         !!\n'
+b'!!  - ^22.0.0 (Planned end-of-life: 2027-04-30)                                                                         !!\n'
+b'!!  - ^20.0.0 (Planned end-of-life: 2026-04-30) [DEPRECATED]                                                            !!\n'
+b'!!                                                                                                                      !!\n'
+b'!!  This warning can be silenced by setting the JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION environment variable.        !!\n'
+b'!!                                                                                                                      !!\n'
+b'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n'
+WARNING No cross-stack-reference strength configured, defaulting to "strong". We recommend you set feature flag "@aws-cdk/core:defaultCrossStackReferences" to "both", then deploy everywhere, then set it to "weak". Alternatively, set it to "strong" explicitly to lock in the current producer-protecting behavior. (See: https://github.com/aws/aws-cdk/blob/main/packages/aws-cdk-lib/README.md#reference-strength) (Construct Annotations)
+   AllinCUFullU-prod
+   Acknowledge with 'Construct-Annotations::@aws-cdk/core:crossStackReferencesDefaultStrong'
+
+WARNING installLatestAwsSdk was not specified, and defaults to true. You probably do not want this. Set the global context flag '@aws-cdk/customresources:installLatestAwsSdkDefault' to false to switch this behavior off project-wide, or set the property explicitly to true if you know you need to call APIs that are not in Lambda's built-in SDK version. (Construct Annotations)
+   AllinCUFullU-prod/Secrets/RotationOnDeploy
+   Acknowledge with 'Construct-Annotations::@aws-cdk/custom-resources:installLatestAwsSdkNotSpecified'
+start: Building Secrets Nested Stack Template
+success: Built Secrets Nested Stack Template
+start: Publishing Secrets Nested Stack Template (368447243804-us-east-1-9bcdd409)
+success: Published Secrets Nested Stack Template (368447243804-us-east-1-9bcdd409)
+start: Building IamRole Nested Stack Template
+success: Built IamRole Nested Stack Template
+start: Publishing IamRole Nested Stack Template (368447243804-us-east-1-f4ff8e88)
+success: Published IamRole Nested Stack Template (368447243804-us-east-1-f4ff8e88)
+start: Building Lambdas Nested Stack Template
+success: Built Lambdas Nested Stack Template
+start: Publishing Lambdas Nested Stack Template (368447243804-us-east-1-289dd084)
+success: Published Lambdas Nested Stack Template (368447243804-us-east-1-289dd084)
+start: Building ContactFlow Nested Stack Template
+success: Built ContactFlow Nested Stack Template
+start: Publishing ContactFlow Nested Stack Template (368447243804-us-east-1-155bd8b9)
+success: Published ContactFlow Nested Stack Template (368447243804-us-east-1-155bd8b9)
+start: Building AllinCUFullU-prod Template
+success: Built AllinCUFullU-prod Template
+start: Publishing AllinCUFullU-prod Template (368447243804-us-east-1-1ed31280)
+success: Published AllinCUFullU-prod Template (368447243804-us-east-1-1ed31280)
+Hold on while we create a read-only change set to get a diff with accurate replacement information (use --method=template to use a less accurate but faster template-only diff)
+
+Stack AllinCUFullU-prod
+Resources
+[~] AWS::CloudFormation::Stack Secrets.NestedStack/Secrets.NestedStackResource SecretsNestedStackSecretsNestedStackResource20726466
+ └─ [~] TemplateURL
+     └─ [~] .Fn::Join:
+         └─ @@ -5,6 +5,6 @@
+            [ ]     {
+            [ ]       "Ref": "AWS::URLSuffix"
+            [ ]     },
+            [-]     "/cdk-hnb659fds-assets-368447243804-us-east-1/7c99436b085c4876a5c34e030615cdd10fc7e3d78f90e46f3409339a891097ec.json"
+            [+]     "/cdk-hnb659fds-assets-368447243804-us-east-1/3ed57921d6e6f9876a539aa28e3d47cb09513ce13ca50e216aa5e3b7463ac1af.json"
+            [ ]   ]
+            [ ] ]
+[~] AWS::CloudFormation::Stack Lambdas.NestedStack/Lambdas.NestedStackResource LambdasNestedStackLambdasNestedStackResource871D36BA
+ └─ [~] TemplateURL
+     └─ [~] .Fn::Join:
+         └─ @@ -5,6 +5,6 @@
+            [ ]     {
+            [ ]       "Ref": "AWS::URLSuffix"
+            [ ]     },
+            [-]     "/cdk-hnb659fds-assets-368447243804-us-east-1/9cc8bbfdfde1a9ed9d644f9e70ed83b6d0877021fde4c5bb388b3ffe07afeba9.json"
+            [+]     "/cdk-hnb659fds-assets-368447243804-us-east-1/42190d60f4cecbd6f0d1511b073d019fb6fa1bdf61c32648c9a7137e70e7ba96.json"
+            [ ]   ]
+            [ ] ]
+
+Stack AllinCUFullU-prod-SecretsNestedStackSecretsNestedStackResource20726466-1IZWZSCM9ZIRN
+Resources
+[~] Custom::AWS Secrets/RotationOnDeploy/Resource RotationOnDeploy07F71B1C
+ ├─ [~] Create
+ │   └─ [~] .Fn::Join:
+ │       └─ @@ -5,6 +5,6 @@
+ │          [ ]     {
+ │          [ ]       "Ref": "RotationFnF5FD23F8"
+ │          [ ]     },
+ │          [-]     "\",\"InvocationType\":\"RequestResponse\",\"Payload\":\"{\\\"deploy_id\\\": \\\"2026-08-17T21:23:21+00:00\\\"}\"},\"physicalResourceId\":{\"id\":\"rotation-on-deploy\"}}"
+ │          [+]     "\",\"InvocationType\":\"RequestResponse\",\"Payload\":\"{\\\"deploy_id\\\": \\\"2026-08-18T13:54:19+00:00\\\"}\"},\"physicalResourceId\":{\"id\":\"rotation-on-deploy\"}}"
+ │          [ ]   ]
+ │          [ ] ]
+ └─ [~] Update
+     └─ [~] .Fn::Join:
+         └─ @@ -5,6 +5,6 @@
+            [ ]     {
+            [ ]       "Ref": "RotationFnF5FD23F8"
+            [ ]     },
+            [-]     "\",\"InvocationType\":\"RequestResponse\",\"Payload\":\"{\\\"deploy_id\\\": \\\"2026-08-17T21:23:21+00:00\\\"}\"},\"physicalResourceId\":{\"id\":\"rotation-on-deploy\"}}"
+            [+]     "\",\"InvocationType\":\"RequestResponse\",\"Payload\":\"{\\\"deploy_id\\\": \\\"2026-08-18T13:54:19+00:00\\\"}\"},\"physicalResourceId\":{\"id\":\"rotation-on-deploy\"}}"
+            [ ]   ]
+            [ ] ]
+
+Stack AllinCUFullU-prod-IamRoleNestedStackIamRoleNestedStackResource97089049-GEFBAMKGX8L4
+There were no differences
+Stack AllinCUFullU-prod-LambdasNestedStackLambdasNestedStackResource871D36BA-1GVQU8YDZXIRH
+Resources
+[~] AWS::Lambda::Function Lambdas/FnCallTransfer FnCallTransferA38918D4
+ ├─ [~] Code
+ │   └─ [~] .S3Key:
+ │       ├─ [-] 8507e44fdb2d7a12f48e02176950384306940391cc3bef68770a2454b25b81cf.zip
+ │       └─ [+] 55b98898e36ac1598fb3540d3d0c651bed82e035b6ba3ba5561c12fe4f3e3889.zip
+ └─ [~] Metadata
+     └─ [~] .aws:asset:path:
+         ├─ [-] asset.8507e44fdb2d7a12f48e02176950384306940391cc3bef68770a2454b25b81cf
+         └─ [+] asset.55b98898e36ac1598fb3540d3d0c651bed82e035b6ba3ba5561c12fe4f3e3889
+
+Omitted 7 changes because they are likely mangled non-ASCII characters. Use --strict to print them.
+Stack AllinCUFullU-prod-ContactFlowNestedStackContactFlowNestedStackResource3C764EB6-1G9PU8GA2SI1A
+There were no differences
+
+
+✨  Number of stacks with differences: 3
+
+
+DOMAIN+godwill.cho@SWO3K79325073GT MINGW64 ~/OneDrive - SoftwareOne/Desktop/ALL_IN_CU_PINDROP/PINDROP_IMPLEMETATION/pindrop-connect-cdk (main)
+$ 
